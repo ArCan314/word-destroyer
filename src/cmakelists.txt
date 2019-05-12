@@ -1,0 +1,4 @@
+cmake_minimum_required(VERSION 3.10)
+project(word-destroyer)
+aux_source_directory(../src/include HEADERS)
+add_executable(word-destroyer ../src/main.cc ${HEADERS})

@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "D:\\s0fTw4r3\\Visual Studio 2019\\VC\\Tools\\MSVC\\14.20.27508\\bin\\Hostx64\\x64\\cl.exe",
+            "intelliSenseMode": "msvc-x64",
+            "cppStandard": "c++11",
+            "cStandard": "c11",
+            "includePath": [
+                "D:\\s0fTw4r3\\Visual Studio 2019\\VC\\Tools\\MSVC\\14.20.27508\\include"
+            ]
+        }
+    ],
+    "version": 4
+}
