@@ -31,7 +31,7 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
     {
         is_updated = true;
         word_set_.insert(new_word);
-        word_vec_.push_back({new_word, name, 0, 0, get_difficulty(new_word)});
+        word_vec_.push_back({new_word, name, 0, 0, static_cast<unsigned char>(get_difficulty(new_word))});
         return true;
     }
 }
@@ -40,7 +40,6 @@ const Word &WordList::get_word(int difficulty)
 {
     std::vector<int> temp;
     static std::random_device r;
-    static std::minstd_rand mr(r);
 
     for (std::size_t i = 0; i < word_vec_.size(); i++)
     {
@@ -49,7 +48,7 @@ const Word &WordList::get_word(int difficulty)
     }
 
     std::uniform_int_distribution<int> uni_rd(0, temp.size());
-    return word_vec_.at(temp[uni_rd(mr)]);
+    return word_vec_.at(temp[uni_rd(r)]);
 }
 
 WordList::~WordList()
@@ -112,12 +111,20 @@ void WordList::Serialize(const Word &warp, char *buf, std::size_t &write_len)
 
     get_chksum(temp);
 
-    char *byte_ptr = reinterpret_cast<char *>(&temp);
-    for (std::size_t i = 0; i < sizeof(unsigned char) + static_cast<std::size_t>(temp.len); i++)
-    {
-        buf[write_len++] = *byte_ptr;
-        byte_ptr++;
-    }
+    std::memcpy(buf + write_len , &temp , sizeof(temp.len) + sizeof(temp.word_len) );
+    write_len += sizeof(temp.len) + sizeof(temp.word_len);
+
+    std::memcpy(buf + write_len , temp.word , temp.word_len );
+    write_len += temp.word_len;
+
+    std::memcpy(buf + write_len, &temp.name_len, sizeof(temp.name_len));
+    write_len += sizeof(temp.name_len);
+
+    std::memcpy(buf + write_len, temp.name, temp.name_len);
+    write_len += temp.name_len;
+
+    std::memcpy(buf + write_len, &temp.total, sizeof(unsigned short) * 2 + sizeof(unsigned char) * 2);
+    write_len += sizeof(unsigned short) * 2 + sizeof(unsigned char) * 2;
 
     delete[] temp.word;
     delete[] temp.name;
@@ -125,7 +132,7 @@ void WordList::Serialize(const Word &warp, char *buf, std::size_t &write_len)
 
 void WordList::get_chksum(WordSerializationWarp &warp)
 {
-    unsigned char chksum;
+    unsigned char chksum = 0;
     unsigned char *byte_ptr = reinterpret_cast<unsigned char *>(&warp);
     for (std::size_t i = 0; i < static_cast<std::size_t>(warp.len); i++)
     {
@@ -145,6 +152,8 @@ int WordList::get_difficulty(const std::string &word)
 
 bool WordList::Load()
 {
+	std::ofstream ofs_create_file(word_path_, std::ofstream::binary | std::ofstream::app);	// create file if not exist
+
     std::ifstream ifs(word_path_, std::ifstream::binary);
     if (ifs)
     {
@@ -156,6 +165,8 @@ bool WordList::Load()
             word_set_.insert(std::move(temp.word));
         }
         last_origin_ = word_vec_.size();
+
+		return true;
     }
     else
     {
@@ -183,6 +194,8 @@ Word WordList::Deserialize(std::ifstream &ifs)
     if (now_chksum != temp.chksum)
     {
         Log::WriteLog("Loading wordlist : checksum error");
+        delete[] temp.word;
+        delete[] temp.name;
         temp.len = 0;
         return {"", "", 0, 0, 0};
     }
@@ -194,9 +207,9 @@ Word WordList::Deserialize(std::ifstream &ifs)
 
         for (std::size_t i = 0; i < temp.name_len; i++)
             res.contributor.push_back(temp.name[i]);
+
+        delete[] temp.word;
+        delete[] temp.name;
         return res;
     }
-
-    delete[] temp.word;
-    delete[] temp.name;
 }

@@ -13,7 +13,7 @@ struct Word
     std::string contributor;
     unsigned short total;
     unsigned short correct;
-    char difficulty;
+    unsigned char difficulty;
 };
 
 struct WordSerializationWarp
@@ -29,11 +29,10 @@ struct WordSerializationWarp
     unsigned char chksum;
 };
 /*
-| 1B  |   1B      | VAR  |   1B    |  VAR |   2B    |    2b     |   1B           |    1B    |
-| LEN |  LEN_WORD| WORD| LEN_NAME | NAME |  TOTAL  |  CORRECT  |  diff          |   chksum  |
-|
-
+| 1B  |   1B      | VAR  |   1B     |  VAR  |   2B    |    2B     |   1B    |    1B   |
+| LEN |  LEN_WORD | WORD | LEN_NAME |  NAME |  TOTAL  |  CORRECT  |  diff   |  chksum |
 */
+
 class WordList
 {
 public:

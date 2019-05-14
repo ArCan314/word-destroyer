@@ -6,9 +6,9 @@
 
 struct UserSerializationWarp
 {
-    char name_len;
+    unsigned char name_len;
     char *name;
-    char pswd_len;
+    unsigned char pswd_len;
     char *pswd;
     unsigned level;
 };
@@ -39,7 +39,7 @@ User::User(std::ifstream &ifs)
         Log::WriteLog("");
 }
 
-bool User::Save(std::ofstream &ofs)
+bool User::Save(std::ofstream &ofs) const
 {
     UserSerializationWarp temp{name_.size(), nullptr, pswd_.size(), nullptr, level_};
 
@@ -53,7 +53,12 @@ bool User::Save(std::ofstream &ofs)
         temp.pswd[i] = pswd_[i];
 
     EncryptPswd(temp);
-    ofs.write(reinterpret_cast<char *>(&temp), sizeof(char) * 2 + sizeof(unsigned) + temp.name_len + temp.pswd_len);
+    
+    ofs.write(reinterpret_cast<char *>(&temp), sizeof(temp.name_len));
+    ofs.write(temp.name, temp.name_len);
+    ofs.write(reinterpret_cast<char *>(&temp.pswd_len), sizeof(temp.pswd_len));
+    ofs.write(temp.pswd, temp.pswd_len);
+    ofs.write(reinterpret_cast<char *>(&temp.level), sizeof(temp.level));
 
     delete[] temp.name;
     delete[] temp.pswd;

@@ -3,20 +3,39 @@
 #include <string>
 #include <fstream>
 
+enum UserType
+{
+    USERTYPE_C = 0,
+    USERTYPE_P,
+    USERTYPE_U
+};
+
 class User
 {
 public:
     User() = default;
+    User(const std::string &name, const std::string &pswd, UserType utype)
+        : name_(name), pswd_(pswd), level_(unsigned(0)), user_type_(utype) {}
     User(std::ifstream &ifs);
 
-    virtual bool Save(std::ofstream &ofs);
+    const std::string &get_password() const { return pswd_; }
+    const std::string &get_user_name() const { return name_; }
+
+    void set_user_type(UserType u) { user_type_ = u; }
+    UserType get_user_type() const { return user_type_; }
+
+    unsigned get_level() const { return level_; }
+
+    virtual bool Save(std::ofstream &ofs) const;
     virtual bool Load(std::ifstream &ifs);
 
-    virtual ~User();
+    virtual ~User() = default;
+
 protected:
     std::string name_;
     std::string pswd_;
     unsigned level_ = 0;
-private:
+    UserType user_type_ = UserType::USERTYPE_U;
 
+private:
 };
