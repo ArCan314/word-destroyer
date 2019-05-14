@@ -5,8 +5,8 @@
 #include <set>
 #include <map>
 
-class Contributor;
-class Player;
+#include "player.h"
+#include "contributor.h"
 enum UserType;
 
 class AccountSys
@@ -18,6 +18,9 @@ public:
     bool LogIn(const std::string &name, const std::string &password);
     bool SignUp(const std::string &name, const std::string &password, UserType utype);
     void LogOut(const std::string &name);
+
+    constexpr std::size_t get_min_acc_len() { return 4; }
+    constexpr std::size_t get_min_pswd_len() { return 9; }
 
     Contributor get_contributor(const std::string &name) const;
     Contributor &get_ref_contributor(const std::string &name);
@@ -57,5 +60,6 @@ private:
     std::map<std::string, size_t> player_map_;
     std::set<std::size_t> online_players_;
     std::set<std::size_t> online_contributors_;
+    std::string current_user_str_;
     int total_user_ = 0;
 };

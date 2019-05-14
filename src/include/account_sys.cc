@@ -9,7 +9,7 @@
 #include "contributor.h"
 #include "log.h"
 
-const std::string AccountSys::account_path_ = "../../data/acnt.txt";
+const std::string AccountSys::account_path_ = "../data/acnt.txt";
 
 AccountSys::AccountSys()
 {
@@ -44,11 +44,12 @@ AccountSys::AccountSys()
             }
         }
         total_user_ = contributors_.size() + players_.size();
+		Log::WriteLog(std::string("AccSys: successfully initialized, load ") + std::to_string(total_user_) + "users");
         // Error Handling
     }
     else
     {
-        Log::WriteLog("Cannot open the account file");
+        Log::WriteLog(std::string("AccSys: Cannot open the account file, path: ") + account_path_);
     }
 }
 
@@ -56,7 +57,7 @@ bool AccountSys::LogIn(const std::string &name, const std::string &password)
 {
     if (is_online(name))
     {
-        Log::WriteLog(name + "is already online");
+        Log::WriteLog(std::string("AccSys: ") + name + "is already online");
         return false;
     }
     else
@@ -76,6 +77,11 @@ bool AccountSys::LogIn(const std::string &name, const std::string &password)
             pswd = players_[pos].get_password();
             utype = players_[pos].get_user_type();
         }
+		else
+		{
+			Log::WriteLog(std::string("AccSys: Log in failed : Has no user named ") + name);
+			return false;
+		}
 
         if (password == pswd)
         {
@@ -94,7 +100,7 @@ bool AccountSys::LogIn(const std::string &name, const std::string &password)
         }
         else
         {
-            Log::WriteLog(name + " failed to log in: error password");
+            Log::WriteLog(std::string("AccSys: ") + name + " failed to log in: error password");
             return false;
         }
     }
@@ -105,7 +111,7 @@ bool AccountSys::SignUp(const std::string &name, const std::string &password, Us
 {
     if (is_repeat(name))
     {
-        Log::WriteLog("Sign up failed : name repeated");
+        Log::WriteLog(std::string("AccSys: ") + "Sign up failed : name repeated, name:" + name);
         return false;
     }
     else
@@ -141,7 +147,7 @@ Contributor &AccountSys::get_ref_contributor(const std::string &name)
 	if (con_map_.count(name))
 		return contributors_[con_map_.at(name)];
 	else
-		throw std::logic_error(std::string("no contributor names ") + name);
+		throw std::logic_error(std::string("AccSys: ") + std::string("no contributor named ") + name);
 }
 
 Player AccountSys::get_player(const std::string &name) const
@@ -158,7 +164,7 @@ Player &AccountSys::get_ref_player(const std::string &name)
     if (player_map_.count(name))
         return players_[player_map_.at(name)];
 	else
-		throw std::logic_error(std::string("no player names ") + name);
+		throw std::logic_error(std::string("AccSys: ") + std::string("no player names ") + name);
 }
 
 bool AccountSys::Save() const

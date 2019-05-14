@@ -53,7 +53,8 @@ bool User::Save(std::ofstream &ofs) const
         temp.pswd[i] = pswd_[i];
 
     EncryptPswd(temp);
-    
+	char utype = static_cast<char>(user_type_);
+	ofs.write(&utype, sizeof(utype));
     ofs.write(reinterpret_cast<char *>(&temp), sizeof(temp.name_len));
     ofs.write(temp.name, temp.name_len);
     ofs.write(reinterpret_cast<char *>(&temp.pswd_len), sizeof(temp.pswd_len));

@@ -82,8 +82,11 @@ bool Log::WriteLog(const std::string &log_str)
   if (!is_inited)
   {
     bool is_init_success = InitLog();
-    if (is_init_success)
-      is_inited = true;
+	if (is_init_success)
+	{
+		is_inited = true;
+		Log::WriteLog("Log set up");
+	}
   }
   if (log_stream)
   {
