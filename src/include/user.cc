@@ -1,5 +1,6 @@
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include "user.h"
 #include "log.h"
@@ -86,6 +87,9 @@ bool User::Load(std::ifstream &ifs)
     ifs.read(reinterpret_cast<char *>(&temp.level), sizeof(temp.level));
 
     DecryptPswd(temp);
+
+	name_.clear();
+	pswd_.clear();
 
     for (unsigned i = 0; i < temp.name_len; i++)
         name_.push_back(temp.name[i]);

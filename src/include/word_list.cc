@@ -9,7 +9,7 @@
 #include "word_list.h"
 #include "log.h"
 
-const std::string WordList::word_path_ = "../../data/words.dat";
+const std::string WordList::word_path_ = "../data/words.dat";
 static const std::size_t kBufSize = 2048;
 
 WordList::WordList()

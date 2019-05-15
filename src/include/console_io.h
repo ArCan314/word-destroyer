@@ -2,12 +2,19 @@
 
 // WARNING : OS(WIN32) SPECIFIC CODE
 class AccountSys;
+class WordList;
+enum NextPage;
+
 namespace ConsoleIO
 {
 #include "Windows.h"
 
-	void set_account_sys_ptr(AccountSys *);
+	void InitAttr();
 
+	void set_account_sys_ptr(AccountSys *);
+	void set_wordlist_ptr(WordList *);
+	DWORD IO_Start(); 
+	DWORD IOD_Start();
 	// return ErrorCode
 	DWORD set_console_window_size();
 	DWORD set_console_window_size(SHORT dwWidth, SHORT dwHeight);
@@ -30,5 +37,8 @@ namespace ConsoleIO
 	DWORD disable_scrollbar();
 	DWORD enable_scrollbar();
 
-	DWORD show_menu();
+	DWORD to_welcome_page();
+	DWORD to_menu_page(NextPage &next_page);
+	DWORD to_my_info_page(NextPage &next_page);
+
 };

@@ -3,6 +3,7 @@
 
 #include "user.h"
 #include "contributor.h"
+#include "player.h"
 #include "log.h"
 
 Contributor::Contributor(std::ifstream &ifs) : User(ifs), word_contributed_(int(0))
@@ -13,7 +14,14 @@ Contributor::Contributor(std::ifstream &ifs) : User(ifs), word_contributed_(int(
         Log::WriteLog("Failed to load contributor");
 }
 
-bool Contributor::Save(std::ofstream &ofs) const 
+void Contributor::from_player(const Player &player)
+{
+	User::operator=(player);
+	user_type_ = UserType::USERTYPE_C;
+	word_contributed_ = 0;
+}
+
+bool Contributor::Save(std::ofstream &ofs) const
 {
     User::Save(ofs);
     ofs.write(reinterpret_cast<const char *>(&word_contributed_), sizeof(word_contributed_));
@@ -26,5 +34,5 @@ bool Contributor::Load(std::ifstream &ifs)
 	User::Load(ifs);
     ifs.read(reinterpret_cast<char *>(&word_contributed_), sizeof(word_contributed_));
 
-    return ifs.fail();
+    return !ifs.fail();
 }

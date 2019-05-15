@@ -16,6 +16,16 @@ public:
     User() = default;
     User(const std::string &name, const std::string &pswd, UserType utype)
         : name_(name), pswd_(pswd), level_(unsigned(0)), user_type_(utype) {}
+	User::User(User &&other) noexcept : name_(std::move(other.name_)), pswd_(std::move(other.pswd_)), level_(other.level_), user_type_(other.user_type_) {}
+	User::User(const User &other) : name_(other.name_), pswd_(other.pswd_), level_(other.level_), user_type_(other.user_type_) {}
+	User &operator=(const User &rhs)
+	{
+		name_ = rhs.name_;
+		pswd_ = rhs.pswd_;
+		level_ = rhs.level_;
+		user_type_ = rhs.user_type_;
+		return *this;
+	}
     User(std::ifstream &ifs);
 
     const std::string &get_password() const { return pswd_; }
