@@ -40,5 +40,6 @@ namespace ConsoleIO
 	DWORD to_welcome_page();
 	DWORD to_menu_page(NextPage &next_page);
 	DWORD to_my_info_page(NextPage &next_page);
+	DWORD to_user_list_page(NextPage &next_page);
 
 };
