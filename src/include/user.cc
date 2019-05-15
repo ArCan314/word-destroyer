@@ -16,6 +16,7 @@ struct UserSerializationWarp
 static void EncryptPswd(UserSerializationWarp &warp)
 {
     unsigned char cip = (warp.name_len + warp.pswd_len + warp.level) & 0x3;
+    cip = cip ? cip : 0x2;
     for (int i = 0; i < 4; i++)
         cip |= cip << 2;
     for (unsigned i = 0; i < static_cast<unsigned>(warp.pswd_len); i++)
@@ -25,6 +26,7 @@ static void EncryptPswd(UserSerializationWarp &warp)
 static void DecryptPswd(UserSerializationWarp &warp)
 {
     unsigned char cip = (warp.name_len + warp.pswd_len + warp.level) & 0x3;
+    cip = cip ? cip : 0x2;
     for (int i = 0; i < 4; i++)
         cip |= cip << 2;
     for (unsigned i = 0; i < static_cast<unsigned>(warp.pswd_len); i++)
@@ -53,8 +55,8 @@ bool User::Save(std::ofstream &ofs) const
         temp.pswd[i] = pswd_[i];
 
     EncryptPswd(temp);
-	char utype = static_cast<char>(user_type_);
-	ofs.write(&utype, sizeof(utype));
+    char utype = static_cast<char>(user_type_);
+    ofs.write(&utype, sizeof(utype));
     ofs.write(reinterpret_cast<char *>(&temp), sizeof(temp.name_len));
     ofs.write(temp.name, temp.name_len);
     ofs.write(reinterpret_cast<char *>(&temp.pswd_len), sizeof(temp.pswd_len));
@@ -77,10 +79,11 @@ bool User::Load(std::ifstream &ifs)
     ifs.read(reinterpret_cast<char *>(&temp.name_len), sizeof(temp.name_len));
 
     temp.name = new char[temp.name_len];
-    ifs.read(temp.name, temp.name_len + sizeof(temp.pswd_len));
-
+    ifs.read(temp.name, temp.name_len);
+    ifs.read(reinterpret_cast<char *>(&temp.pswd_len), sizeof(temp.pswd_len));
     temp.pswd = new char[temp.pswd_len];
-    ifs.read(temp.pswd, temp.pswd_len + sizeof(temp.level));
+    ifs.read(temp.pswd, temp.pswd_len);
+    ifs.read(reinterpret_cast<char *>(&temp.level), sizeof(temp.level));
 
     DecryptPswd(temp);
 

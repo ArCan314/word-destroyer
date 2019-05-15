@@ -23,6 +23,7 @@ bool Contributor::Save(std::ofstream &ofs) const
 
 bool Contributor::Load(std::ifstream &ifs)
 {
+	User::Load(ifs);
     ifs.read(reinterpret_cast<char *>(&word_contributed_), sizeof(word_contributed_));
 
     return ifs.fail();

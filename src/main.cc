@@ -7,6 +7,7 @@
 #include "include/player.h"
 #include "include/contributor.h"
 #include "include/console_io.h"
+#include "include/word_list.h"
 
 #include "Windows.h"
 
@@ -27,12 +28,13 @@ void ConsoleInit()
 int main()
 {
 	AccountSys acc_sys;
+	WordList word_list;
 	ConsoleInit();
 	ConsoleIO::set_account_sys_ptr(&acc_sys);
 	ConsoleIO::show_menu();
 	
 
-	std::cin >> std::string();
+	// std::cin >> std::string();
 	Log::CloseLog();
 	return 0;
 }

@@ -24,6 +24,7 @@ bool Player::Save(std::ofstream &ofs) const
 
 bool Player::Load(std::ifstream &ifs)
 {
+	User::Load(ifs);
     ifs.read(reinterpret_cast<char *>(&this->exp_), sizeof(exp_));
     ifs.read(reinterpret_cast<char *>(&this->level_passed_), sizeof(level_passed_));
 

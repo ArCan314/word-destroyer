@@ -25,24 +25,28 @@ AccountSys::AccountSys()
         while (ifs)
         {
             ifs.read(&utype, sizeof(utype));
-            switch (utype)
-            {
-            case UserType::USERTYPE_C:
-                temp_c.Load(ifs);
-                temp_c.set_user_type(static_cast<UserType>(utype));
-                contributors_.push_back(temp_c);
-                con_map_[temp_c.get_user_name()] = contributors_.size() - 1;
-                break;
-            case UserType::USERTYPE_P:
-                temp_p.Load(ifs);
-                temp_p.set_user_type(static_cast<UserType>(utype));
-                players_.push_back(temp_p);
-                player_map_[temp_p.get_user_name()] = players_.size() - 1;
-                break;
-            default:
-                break;
-            }
+			if (ifs)
+			{
+				switch (utype)
+				{
+				case UserType::USERTYPE_C:
+					temp_c.Load(ifs);
+					temp_c.set_user_type(static_cast<UserType>(utype));
+					contributors_.push_back(temp_c);
+					con_map_[temp_c.get_user_name()] = contributors_.size() - 1;
+					break;
+				case UserType::USERTYPE_P:
+					temp_p.Load(ifs);
+					temp_p.set_user_type(static_cast<UserType>(utype));
+					players_.push_back(temp_p);
+					player_map_[temp_p.get_user_name()] = players_.size() - 1;
+					break;
+				default:
+					break;
+				}
+			}
         }
+		ifs.clear();
         total_user_ = contributors_.size() + players_.size();
 		Log::WriteLog(std::string("AccSys: successfully initialized, load ") + std::to_string(total_user_) + "users");
         // Error Handling

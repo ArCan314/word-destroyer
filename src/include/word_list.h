@@ -3,6 +3,7 @@
 #include <vector>
 #include <set>
 #include <string>
+#include <memory>
 #include <fstream>
 
 #include "log.h"
@@ -20,9 +21,9 @@ struct WordSerializationWarp
 {
     unsigned char len;
     unsigned char word_len;
-    char *word;
+    std::unique_ptr<char[]> word;
     unsigned char name_len;
-    char *name;
+    std::unique_ptr<char[]> name;
     unsigned short total;
     unsigned short correct;
     unsigned char diff;
@@ -49,7 +50,7 @@ private:
     bool Load();
     int get_difficulty(const std::string &word);
     void get_chksum(WordSerializationWarp &warp);
-    void Serialize(const Word &warp, char *buf, std::size_t &write_len);
+    WordSerializationWarp Serialize(const Word &warp);
     Word Deserialize(std::ifstream &ifs);
 
     std::set<std::string> word_set_;
