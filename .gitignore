@@ -34,4 +34,5 @@
 *.log
 
 .vscode/ipch
+data/acnt.txt
 build
