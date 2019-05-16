@@ -211,10 +211,13 @@ std::string AccountSys::get_utype_str(UserType utype) const
 
 void AccountSys::ChangeRole(const std::string & name)
 {
+	static const char *role_str[] = {"Contributor", "Player", ""};
+	UserType utype = get_usertype(name);
+	Log::WriteLog(std::string("AccSys: ") + name + " changes role from" + role_str[utype] + "to " + role_str[(utype == USERTYPE_C) ? USERTYPE_P : USERTYPE_C]);
 	std::size_t pos;
 	Player temp_p;
 	Contributor temp_c;
-	switch (get_usertype(name))
+	switch (utype)
 	{
 	case UserType::USERTYPE_C:
 	{

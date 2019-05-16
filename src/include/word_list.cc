@@ -24,7 +24,7 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
 {
     if (word_set_.count(new_word))
     {
-        Log::WriteLog(new_word + " is already in the word list");
+        Log::WriteLog(std::string("WordList: ") + new_word + " is already in the word list");
         return false;
     }
     else
@@ -115,12 +115,20 @@ WordSerializationWarp WordList::Serialize(const Word &warp)
 void WordList::get_chksum(WordSerializationWarp &warp)
 {
     unsigned char chksum = 0;
-    unsigned char *byte_ptr = reinterpret_cast<unsigned char *>(&warp);
-    for (std::size_t i = 0; i < static_cast<std::size_t>(warp.len); i++)
-    {
-        chksum += *byte_ptr;
-        byte_ptr++;
-    }
+	chksum = warp.len + warp.word_len + warp.name_len + warp.total + warp.correct + warp.diff;
+	// don't release byte
+	char *byte = warp.word.get();
+	for (int i = 0; i < warp.word_len; i++)
+	{
+		chksum += *byte;
+		byte++;
+	}
+	byte = warp.name.get();
+	for (int i = 0; i < warp.name_len; i++)
+	{
+		chksum += *byte;
+		byte++;
+	}
     warp.chksum = chksum;
 }
 
@@ -143,19 +151,18 @@ bool WordList::Load()
         while (ifs)
         {
             temp = Deserialize(ifs);
-            if (ifs)
+            if (ifs && temp.word.size() && temp.contributor.size())
             {
                 word_vec_.push_back(temp);
                 word_set_.insert(std::move(temp.word));
             }
         }
         last_origin_ = word_vec_.size();
-
         return true;
     }
     else
     {
-        Log::WriteLog("WordList: Failed to load wordlist : cannot open the file");
+        Log::WriteLog("WordList: Failed to load wordlist, cannot open the file");
         return false;
     }
 }
@@ -178,12 +185,13 @@ Word WordList::Deserialize(std::ifstream &ifs)
     ifs.read(reinterpret_cast<char *>(&temp.diff), sizeof(temp.diff));
     ifs.read(reinterpret_cast<char *>(&temp.chksum), sizeof(temp.chksum));
 
-    unsigned char now_chksum = temp.chksum;
+    unsigned char expect_chksum = temp.chksum;
     get_chksum(temp);
 
-    if (now_chksum != temp.chksum)
+    if (expect_chksum != temp.chksum)
     {
-        Log::WriteLog("WordList: Loading wordlist : checksum error");
+		Log::WriteLog(std::string("WordList: ") + temp.word.get() + " checksum error, expected :" +
+					  std::to_string(static_cast<int>(expect_chksum)) + ", actually : " + std::to_string(static_cast<int>(temp.chksum)));
         temp.len = 0;
         return {"", "", 0, 0, 0};
     }

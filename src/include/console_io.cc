@@ -2346,5 +2346,6 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 	SetConsoleMode(hStdOut, dwOldConsoleMode);
 	set_cursor_visible(hStdOut, TRUE);
 	return ERROR_SUCCESS;
-
 }
+
+
