@@ -186,7 +186,7 @@ DWORD ConsoleIO::IO_Start()
 DWORD ConsoleIO::IOD_Start()
 {
 	NextPage np;
-	to_user_list_page(np);
+	to_contributor_play_page(np);
 	return ERROR_SUCCESS;
 }
 
@@ -2338,6 +2338,208 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 						break;
 					}
 					break;
+				}
+			}
+		}
+	}
+
+	SetConsoleMode(hStdOut, dwOldConsoleMode);
+	set_cursor_visible(hStdOut, TRUE);
+	return ERROR_SUCCESS;
+}
+
+DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
+{
+	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	DWORD dwOldConsoleMode;
+
+	enum CPlayPos
+	{
+		HEADER = 0,
+		INPUT,
+		CON,
+		BACK,
+		INFO
+	};
+
+	if (hStdOut == INVALID_HANDLE_VALUE || hStdIn == INVALID_HANDLE_VALUE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("Show menu failed", last_error);
+		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get standard output handle, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
+
+	if (GetConsoleScreenBufferInfo(hStdOut, &csbi) == FALSE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("Show menu failed", last_error);
+		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get console screen buffer info, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
+
+	set_cursor_visible(hStdOut, FALSE);
+	GetConsoleMode(hStdOut, &dwOldConsoleMode);
+	SetConsoleMode(hStdOut, ENABLE_PROCESSED_INPUT);
+
+	DWORD written;
+	SMALL_RECT srW = csbi.srWindow;
+
+	SHORT x = srW.Right / 5 + 1;
+	SHORT y = srW.Top + 1;
+	SHORT dx = (srW.Right * 4 / 5 - 1) - x;
+	SHORT dy = (srW.Bottom - 1) - y;
+
+	const char *OptionStr[INFO + 1] =
+	{
+		"Enter your words",
+		"Your word",
+		"Submit",
+		"Back to menu",
+		""
+	};
+
+	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[INFO + 1] =
+	{
+		{x + dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, y + dy / 4},			// HEADER
+		{x + dx / 3, y + dy * 2 / 4},			// INPUT
+		{x + dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 3 / 4},			// CON
+		{x + dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, y + dy * 3 / 4},	// BACK
+		{x + dx / 2, y + dy - 2}	// INFO
+	};
+
+	for (SHORT row = 0; row < srW.Bottom; row++)
+		for (SHORT col = 0; col < srW.Right; col++)
+		{
+			if (col < x || col > x + dx)
+				WriteConsoleOutputCharacter(hStdOut, "%", 1, {col, row}, &written);
+			else if (col == x || col == x + dx)
+				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row}, &written);
+			else if (row == y || row == y + dy)
+				WriteConsoleOutputCharacter(hStdOut, "$", 1, {col, row}, &written);
+			else if (row < y || row > y + dy)
+				WriteConsoleOutputCharacter(hStdOut, "%", 1, {col, row}, &written);
+		}
+
+	for (SHORT row = 0; row < srW.Bottom; row++)
+		for (SHORT col = 0; col < srW.Right; col++)
+		{
+			if (col == OptionPos[HEADER].first && row == OptionPos[HEADER].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[HEADER], std::strlen(OptionStr[HEADER]), {col , row}, &written);
+			else if (col == OptionPos[INPUT].first && row == OptionPos[INPUT].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[INPUT], std::strlen(OptionStr[INPUT]), {col - static_cast<SHORT>(std::strlen(OptionStr[INPUT])) , row}, &written);
+			else if (col == OptionPos[CON].first && row == OptionPos[CON].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[CON], std::strlen(OptionStr[CON]), {col , row}, &written);
+			else if (col == OptionPos[BACK].first && row == OptionPos[BACK].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[BACK], std::strlen(OptionStr[BACK]), {col , row}, &written);
+
+		}
+
+	UserType utype = USERTYPE_C;
+
+
+	bool is_break = false;
+	CPlayPos cpos = BACK;
+
+	WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second}, &written);
+
+	INPUT_RECORD irKb[12];
+	std::string input_str;
+	std::string name = acc_sys->get_current_user_str();
+	DWORD wNumber;
+
+	while (!is_break)
+	{
+		if (ReadConsoleInput(hStdIn, irKb, 12, &wNumber) == FALSE)
+		{
+			DWORD last_error = GetLastError();
+			ErrorMsg("Show welcome page failed", last_error);
+			Log::WriteLog(std::string("ConIO: Show welcome page failed: cannot read console input, errorcode: ") + std::to_string(last_error));
+			return last_error;
+		}
+
+		for (DWORD i = 0; i < wNumber; i++)
+		{
+			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown)
+			{
+				if (std::isalpha(irKb[i].Event.KeyEvent.uChar.AsciiChar))
+				{
+					if (cpos == INPUT && input_str.size() < 26)
+					{
+						char temp_input = irKb[i].Event.KeyEvent.uChar.AsciiChar;
+						WriteConsoleOutputCharacter(hStdOut, &temp_input, 1, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second}, &written);
+						input_str.push_back(temp_input);
+						SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second});
+					}
+				}
+				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
+				{
+				case VK_UP:
+					if (cpos == BACK || cpos == CON)
+					{
+						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+						cpos = INPUT;
+						set_cursor_visible(hStdOut, TRUE);
+						SetConsoleCursorPosition(hStdOut, {OptionPos[cpos].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[cpos].second});
+					}
+					break;
+				case VK_DOWN:
+					if (cpos == INPUT)
+					{
+						set_cursor_visible(hStdOut, FALSE);
+						cpos = CON;
+						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+					}
+					break;
+				case VK_LEFT:
+					if (cpos == INPUT)
+					{
+						set_cursor_visible(hStdOut, FALSE);
+						cpos = CON;
+						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+					}
+					else
+					{
+						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+						cpos = (cpos == CON) ? BACK : CON;
+						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+					}
+					break;
+				case VK_RIGHT:
+					if (cpos == INPUT)
+					{
+						set_cursor_visible(hStdOut, FALSE);
+						cpos = BACK;
+						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+					}
+					else
+					{
+						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+						cpos = (cpos == CON) ? BACK : CON;
+						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[cpos]), {OptionPos[cpos].first, OptionPos[cpos].second}, &written);
+					}
+					break;
+				case VK_RETURN:
+					if (cpos == BACK)
+					{
+
+					}
+					else if (cpos == CON)
+					{
+
+					}
+					break;
+				case VK_BACK:
+					if (cpos == INPUT && input_str.size())
+					{
+						WriteConsoleOutputCharacter(hStdOut, " ", 1, {OptionPos[INPUT].first + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second}, &written);
+						input_str.pop_back();
+						SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second});
+					}
+					break;
+				default:break;
 				}
 			}
 		}
