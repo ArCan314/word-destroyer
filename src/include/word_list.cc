@@ -8,6 +8,7 @@
 
 #include "word_list.h"
 #include "log.h"
+#include "game.h"
 
 const std::string WordList::word_path_ = "../data/words.dat";
 static const std::size_t kBufSize = 2048;
@@ -36,19 +37,25 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
     }
 }
 
-const Word &WordList::get_word(int difficulty)
+const Word &WordList::get_word(int level)
 {
-    std::vector<int> temp;
     static std::random_device r;
-
-    for (std::size_t i = 0; i < word_vec_.size(); i++)
-    {
-        if (word_vec_[i].difficulty == difficulty)
-            temp.push_back(i);
-    }
-
-    std::uniform_int_distribution<int> uni_rd(0, temp.size());
-    return word_vec_.at(temp[uni_rd(r)]);
+	int max_stage = get_max_stage();
+	int increasement = word_set_.size() / max_stage;
+	std::uniform_int_distribution<int> uni_rd((level - 1) * increasement, increasement * level);
+	return word_vec_.at(uni_rd(r));
+	/*
+	if (level <= 60)
+	{
+		std::uniform_int_distribution<int> uni_rd((level - 1) * 100, 100 * level);
+		return word_vec_.at(uni_rd(r));
+	}
+	else
+	{
+		std::uniform_int_distribution<int> uni_rd(3000 + 50 * (level - 1), 3000 + 50 * level);
+		return word_vec_.at(uni_rd(r));
+	}
+	*/
 }
 
 WordList::~WordList()
@@ -135,9 +142,35 @@ void WordList::get_chksum(WordSerializationWarp &warp)
 int WordList::get_difficulty(const std::string &word)
 {
     bool is_upper = std::isupper(word.front());
+	int upper = 0;
+	int lower = 0;
     int len = word.length();
-    //
-    return 0;
+	int change_time = 0;
+	for (auto c : word)
+	{
+		if (std::isupper(c))
+		{
+			if (!is_upper)
+			{
+				change_time++;
+				is_upper = true;
+			}
+			upper++;
+		}
+		else
+		{
+			if (is_upper)
+			{
+				change_time++;
+				is_upper = false;
+			}
+			lower++;
+		}
+	}
+
+	double difficulty = len + change_time + (upper - lower) * 0.1;
+
+    return difficulty;
 }
 
 bool WordList::Load()
@@ -153,11 +186,14 @@ bool WordList::Load()
             temp = Deserialize(ifs);
             if (ifs && temp.word.size() && temp.contributor.size())
             {
+				// if (!temp.difficulty)
+				temp.difficulty = get_difficulty(temp.word);
                 word_vec_.push_back(temp);
                 word_set_.insert(std::move(temp.word));
             }
         }
         last_origin_ = word_vec_.size();
+		std::sort(word_vec_.begin(), word_vec_.end(), [](const Word & a, const Word & b) { return a.difficulty < b.difficulty; });
         return true;
     }
     else

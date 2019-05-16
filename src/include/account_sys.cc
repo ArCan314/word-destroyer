@@ -10,7 +10,7 @@
 #include "contributor.h"
 #include "log.h"
 
-const std::string AccountSys::account_path_ = "../data/acnt.txt";
+const std::string AccountSys::account_path_ = "../data/acnt.dat";
 
 AccountSys::AccountSys()
 {

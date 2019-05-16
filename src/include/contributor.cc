@@ -5,6 +5,7 @@
 #include "contributor.h"
 #include "player.h"
 #include "log.h"
+#include "game.h"
 
 Contributor::Contributor(std::ifstream &ifs) : User(ifs), word_contributed_(int(0))
 {
@@ -35,4 +36,10 @@ bool Contributor::Load(std::ifstream &ifs)
     ifs.read(reinterpret_cast<char *>(&word_contributed_), sizeof(word_contributed_));
 
     return !ifs.fail();
+}
+
+void Contributor::inc_level()
+{
+	if (word_contributed_ > get_level_up_bound(level_, USERTYPE_C))
+		level_++;
 }

@@ -14,11 +14,13 @@
 #include <memory>
 #include <iterator>
 #include <new>
+#include <chrono>
 
 #include "console_io.h"
 #include "log.h"
 #include "account_sys.h"
 #include "word_list.h"
+#include "game.h"
 
 static const int FOREGROUND_WHITE = (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN);
 static const int BACKGROUND_WHITE = (BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED);
@@ -154,6 +156,13 @@ DWORD ConsoleIO::IO_Start()
 				np = P_MENU;
 			clear_screen();
 			break;
+		case P_SP:
+			if (acc_sys->get_current_usertype() == USERTYPE_C)
+				dwErrCode = to_contributor_play_page(np);
+			else
+				dwErrCode = to_player_play_page(np);
+			clear_screen();
+			break;
 		case P_MENU:
 			dwErrCode = to_menu_page(np);
 			if (dwErrCode)
@@ -186,7 +195,7 @@ DWORD ConsoleIO::IO_Start()
 DWORD ConsoleIO::IOD_Start()
 {
 	NextPage np;
-	to_contributor_play_page(np);
+	to_player_play_page(np);
 	return ERROR_SUCCESS;
 }
 
@@ -1914,7 +1923,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 									is_break = true;
 									set_cursor_visible(hOut, FALSE);
 								}
-								catch (const std::exception &e)
+								catch (const std::exception & e)
 								{
 									;
 								}
@@ -1926,7 +1935,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 									is_break = true;
 									set_cursor_visible(hOut, FALSE);
 								}
-								catch (const std::exception &e)
+								catch (const std::exception & e)
 								{
 									;
 								}
@@ -1934,7 +1943,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 							default:break;
 							}
 						}
-						
+
 					}
 					break;
 				case VK_BACK:
@@ -2287,17 +2296,17 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							if (utype == USERTYPE_C)
 							{
 								temp_c_vec.clear();
-								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_user_name() == f_pack.name) temp_c_vec.push_back(a); });
+								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_user_name() == f_pack.name) temp_c_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							else
 							{
 								temp_p_vec.clear();
-								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_user_name() == f_pack.name) temp_p_vec.push_back(a); });
+								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_user_name() == f_pack.name) temp_p_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							break;
-						case FilterPack::FPT_LV: 
+						case FilterPack::FPT_LV:
 							if (utype == USERTYPE_C)
 							{
 								temp_c_vec.clear();
@@ -2312,18 +2321,18 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							}
 							break;
 						case FilterPack::FPT_CON:
-								temp_c_vec.clear();
-								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_word_contributed() == f_pack.integer) temp_c_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							temp_c_vec.clear();
+							std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_word_contributed() == f_pack.integer) temp_c_vec.push_back(a); });
+							DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case FilterPack::FPT_PASS:
-								temp_p_vec.clear();
-								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_level_passed() == f_pack.integer) temp_p_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							temp_p_vec.clear();
+							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_level_passed() == f_pack.integer) temp_p_vec.push_back(a); });
+							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case FilterPack::FPT_EXP:
 							temp_p_vec.clear();
-							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (static_cast<int>(a.get_exp()) == static_cast<int>(f_pack.exp)) temp_p_vec.push_back(a); });
+							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (static_cast<int>(a.get_exp()) == static_cast<int>(f_pack.exp)) temp_p_vec.push_back(a); });
 							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						default:break;
@@ -2348,7 +2357,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
+DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -2444,7 +2453,7 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
 	CPlayPos cpos = BACK;
 
 	WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second}, &written);
-
+	// acc_sys->set_current_user();
 	INPUT_RECORD irKb[12];
 	std::string input_str;
 	std::string name = acc_sys->get_current_user_str();
@@ -2524,11 +2533,36 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
 				case VK_RETURN:
 					if (cpos == BACK)
 					{
-
+						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+						is_break = true;
+						next_page = P_MENU;
 					}
 					else if (cpos == CON)
 					{
+						if (!input_str.size())
+						{
+							std::string emp_str = "No word can be added";
+							WriteConsoleOutputCharacter(hStdOut, space_array, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, emp_str.c_str(), static_cast<SHORT>(emp_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(emp_str.size()) / 2, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_fred, static_cast<SHORT>(emp_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(emp_str.size()) / 2, OptionPos[INFO].second}, &written);
 
+						}
+						else if (word_list->AddWord(input_str, name))
+						{
+							std::string suc_str = "Add your word into word list successfully.";
+							acc_sys->get_ref_contributor(name).inc_word_contributed();
+							WriteConsoleOutputCharacter(hStdOut, space_array, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, suc_str.c_str(), static_cast<SHORT>(suc_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(suc_str.size()) / 2, OptionPos[INFO].second}, &written);
+						}
+						else
+						{
+							std::string fail_str = "This word is already existed";
+							WriteConsoleOutputCharacter(hStdOut, space_array, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, fail_str.c_str(), static_cast<SHORT>(fail_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(fail_str.size()) / 2, OptionPos[INFO].second}, &written);
+						}
 					}
 					break;
 				case VK_BACK:
@@ -2549,5 +2583,514 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
 	set_cursor_visible(hStdOut, TRUE);
 	return ERROR_SUCCESS;
 }
+
+static DWORD ShowGameHelpMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy)
+{
+	DWORD written;
+	enum HelpPos
+	{
+		LINE0,
+		OK
+	};
+
+	const char *OptionStr[OK + 1] =
+	{
+		"Type the word you see and prees Enter after countdown",
+		"Yes",
+	};
+
+	SHORT _x = x + dx / 3,
+		_dx =  dx / 3,
+		_y = y + dy / 3,
+		_dy = dy / 3;
+
+	std::pair<SHORT, SHORT> OptionPos[OK + 1] =
+	{
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy / 3},		// LINE0
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 2 / 3},	// OK
+	};
+	/*
+	for (auto row = _y; row <= _y + _dy; row++)
+		for (auto col = _x; col <= _x + _dx; col++)
+		{
+			if (row == _y || row == _y + _dy || col == _x || col == _x + _dx)
+				WriteConsoleOutputCharacter(hOut, "#", 1, {col, row}, &written);
+			else if (col == _x + 1)
+				WriteConsoleOutputCharacter(hOut, space_array, _dx - 1, {col, row}, &written);
+		}
+	*/
+	for (int i = LINE0; i <= OK; i = i + 1)
+		WriteConsoleOutputCharacter(hOut, OptionStr[i], static_cast<SHORT>(std::strlen(OptionStr[i])), {OptionPos[i].first, OptionPos[i].second}, &written);
+
+	INPUT_RECORD irKb[12];
+	DWORD wNumber;
+	bool is_break = false;
+
+	WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[OK])), {OptionPos[OK].first, OptionPos[OK].second}, &written);
+
+	while (!is_break)
+	{
+		if (ReadConsoleInput(hIn, irKb, 12, &wNumber) == FALSE)
+		{
+			DWORD last_error = GetLastError();
+			ErrorMsg("Show welcome page failed", last_error);
+			Log::WriteLog(std::string("ConIO: Show welcome page failed: cannot read console input, errorcode: ") + std::to_string(last_error));
+			return last_error;
+		}
+
+		for (DWORD i = 0; i < wNumber; i++)
+		{
+			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown)
+			{
+				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
+				{
+				case VK_RETURN:
+					Shine(hOut, static_cast<SHORT>(std::strlen(OptionStr[OK])), {OptionPos[OK].first, OptionPos[OK].second});
+					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[OK])), {OptionPos[OK].first, OptionPos[OK].second}, &written);
+					is_break = true;
+					break;
+				default :
+					break;
+				}
+			}
+		}
+	}
+
+	return ERROR_SUCCESS;
+}
+
+static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy, bool &is_back, bool lv_up, int gain_exp)
+{
+	DWORD written;
+	enum LPassPos
+	{
+		HEADER,
+		LINE0,
+		EXP,
+		LV,
+		OK,
+		BACK
+	};
+	std::string xp_str = std::to_string(gain_exp);
+	const char *OptionStr[BACK + 1] =
+	{
+		"Congratulations",
+		"Level passed",
+		"Gain XP",
+		"LV up",
+		"Next level",
+		"Back to menu"
+	};
+
+	SHORT _x = x + dx / 5,
+		_dx = dx * 3 / 5,
+		_y = y + dy / 5,
+		_dy = dy * 3 / 5;
+
+	std::pair<SHORT, SHORT> OptionPos[BACK + 1] =
+	{
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 5},		// HEADER
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 5},	// LINE1
+		{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[EXP])), _y + _dy * 3 / 5},			// EXP
+		{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[LV])) / 2, _y + _dy * 3 / 5},	// LV
+		{_x + _dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 4 / 5},		// OK
+		{_x + _dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 4 / 5}	// BACK
+	};
+
+	for (auto row = _y; row <= _y + _dy; row++)
+		for (auto col = _x; col <= _x + _dx; col++)
+		{
+			if (row == _y || row == _y + _dy || col == _x || col == _x + _dx)
+				WriteConsoleOutputCharacter(hOut, "#", 1, {col, row}, &written);
+			else if (col == _x + 1)
+				WriteConsoleOutputCharacter(hOut, space_array, _dx - 1, {col, row}, &written);
+		}
+
+	for (int i = HEADER; i <= BACK; i = i + 1)
+		WriteConsoleOutputCharacter(hOut, OptionStr[i], static_cast<SHORT>(std::strlen(OptionStr[i])), {OptionPos[i].first, OptionPos[i].second}, &written);
+	WriteConsoleOutputCharacter(hOut, xp_str.c_str(), static_cast<SHORT>(xp_str.size()), {OptionPos[EXP].first + 1 + static_cast<SHORT>(std::strlen(OptionStr[EXP])), OptionPos[EXP].second}, &written);
+	if (!lv_up)
+		WriteConsoleOutputCharacter(hOut, space_array, static_cast<SHORT>(std::strlen(OptionStr[LV])), {OptionPos[LV].first, OptionPos[LV].second}, &written);
+
+	LPassPos lppos = OK;
+	INPUT_RECORD irKb[12];
+	DWORD wNumber;
+	bool is_break = false;
+
+	WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
+
+	while (!is_break)
+	{
+		if (ReadConsoleInput(hIn, irKb, 12, &wNumber) == FALSE)
+		{
+			DWORD last_error = GetLastError();
+			ErrorMsg("Show welcome page failed", last_error);
+			Log::WriteLog(std::string("ConIO: Show welcome page failed: cannot read console input, errorcode: ") + std::to_string(last_error));
+			return last_error;
+		}
+
+		for (DWORD i = 0; i < wNumber; i++)
+		{
+			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown)
+			{
+				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
+				{
+				case VK_RETURN:
+					Shine(hOut, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second});
+					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
+					if (lppos == BACK)
+						is_back = true;
+					else
+						is_back = false;
+					is_break = true;
+					break;
+				case VK_LEFT:case VK_RIGHT:
+					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
+					lppos = (lppos == BACK) ? OK : BACK;
+					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	return ERROR_SUCCESS;
+}
+
+static DWORD ShowLevelFailMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy, bool &is_back)
+{
+	DWORD written;
+	enum LFailPos
+	{
+		HEADER,
+		LINE0,
+		OK,
+		BACK
+	};
+
+	const char *OptionStr[BACK + 1] =
+	{
+		"Opps",
+		"You failed",
+		"Try again",
+		"Back to menu"
+	};
+
+	SHORT _x = x + dx / 4,
+		_dx = dx / 2,
+		_y = y + dy / 4,
+		_dy = dy / 2;
+
+	std::pair<SHORT, SHORT> OptionPos[BACK + 1] =
+	{
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 4},		// HEADER
+		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 4},	// LINE1
+		{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 3 / 4},		// OK
+		{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 3 / 4}	// BACK
+	};
+
+	for (auto row = _y; row <= _y + _dy; row++)
+		for (auto col = _x; col <= _x + _dx; col++)
+		{
+			if (row == _y || row == _y + _dy || col == _x || col == _x + _dx)
+				WriteConsoleOutputCharacter(hOut, "#", 1, {col, row}, &written);
+			else if (col == _x + 1)
+				WriteConsoleOutputCharacter(hOut, space_array, _dx - 1, {col, row}, &written);
+		}
+
+	for (int i = HEADER; i <= BACK; i = i + 1)
+		WriteConsoleOutputCharacter(hOut, OptionStr[i], static_cast<SHORT>(std::strlen(OptionStr[i])), {OptionPos[i].first, OptionPos[i].second}, &written);
+
+	LFailPos lfpos = OK;
+	INPUT_RECORD irKb[12];
+	DWORD wNumber;
+	bool is_break = false;
+
+	WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
+
+	while (!is_break)
+	{
+		if (ReadConsoleInput(hIn, irKb, 12, &wNumber) == FALSE)
+		{
+			DWORD last_error = GetLastError();
+			ErrorMsg("Show welcome page failed", last_error);
+			Log::WriteLog(std::string("ConIO: Show welcome page failed: cannot read console input, errorcode: ") + std::to_string(last_error));
+			return last_error;
+		}
+
+		for (DWORD i = 0; i < wNumber; i++)
+		{
+			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown)
+			{
+				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
+				{
+				case VK_RETURN:
+					Shine(hOut, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second});
+					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
+					if (lfpos == BACK)
+						is_back = true;
+					else
+						is_back = false;
+					is_break = true;
+					break;
+				case VK_LEFT:case VK_RIGHT:
+					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
+					lfpos = (lfpos == BACK) ? OK : BACK;
+					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	return ERROR_SUCCESS;
+}
+
+static DWORD DrawGameFrame(HANDLE hOut, SMALL_RECT srW, SHORT x, SHORT y, SHORT dx, SHORT dy)
+{
+	DWORD written;
+	for (SHORT row = 0; row < srW.Bottom; row++)
+		for (SHORT col = 0; col < srW.Right; col++)
+		{
+			if (col < x || col > x + dx)
+				WriteConsoleOutputCharacter(hOut, "%", 1, {col, row}, &written);
+			else if (col == x || col == x + dx)
+				WriteConsoleOutputCharacter(hOut, "#", 1, {col, row}, &written);
+			else if (row == srW.Top || row == y + dy)
+				WriteConsoleOutputCharacter(hOut, "$", 1, {col, row}, &written);
+		}
+	return ERROR_SUCCESS;
+}
+
+static DWORD CleanGameBoard(HANDLE hOut, SHORT x, SHORT y, SHORT dx, SHORT dy)
+{
+	DWORD written;
+	for (SHORT row = y + 1; row < y + dy; row++)
+		WriteConsoleOutputCharacter(hOut, space_array, dx - 1, {x + 1, row}, &written);
+	return ERROR_SUCCESS;
+}
+
+static void ShowGameWord(HANDLE hOut, SHORT x, SHORT y, SHORT dx, SHORT dy, const std::string &word)
+{
+	DWORD written;
+	int len = word.size();
+	dx = dx - len;
+	std::random_device rd;
+	std::uniform_int_distribution<int> uid_x(x + 1, x + dx - 1);
+	std::uniform_int_distribution<int> uid_y(y + 1, y + dy - 1);
+	SHORT pos_x = uid_x(rd), pos_y = uid_y(rd);
+	WriteConsoleOutputCharacter(hOut, word.c_str(), word.size(), {pos_x, pos_y}, &written);
+}
+
+static void RidKeyInput(HANDLE hIn)
+{
+	INPUT_RECORD irKb[100];
+	DWORD wNumber;
+	ReadConsoleInput(hIn, irKb, 100, &wNumber);
+}
+
+DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
+{
+	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	DWORD dwOldConsoleMode;
+
+	if (hStdOut == INVALID_HANDLE_VALUE || hStdIn == INVALID_HANDLE_VALUE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("Show menu failed", last_error);
+		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get standard output handle, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
+
+	if (GetConsoleScreenBufferInfo(hStdOut, &csbi) == FALSE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("Show menu failed", last_error);
+		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get console screen buffer info, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
+
+	set_cursor_visible(hStdOut, FALSE);
+	GetConsoleMode(hStdOut, &dwOldConsoleMode);
+	SetConsoleMode(hStdOut, ENABLE_PROCESSED_INPUT);
+
+	enum PPlayPos
+	{
+		TIME,
+		LEVEL,
+		INPUT
+	};
+
+	DWORD written;
+	SMALL_RECT srW = csbi.srWindow;
+
+	SHORT x = srW.Right / 6 + 1;
+	SHORT y = srW.Top + 1;
+	SHORT dx = (srW.Right * 5 / 6 - 1) - x;
+	SHORT dy = (srW.Bottom - 1) - y;
+
+	const char *OptionStr[INPUT + 1] =
+	{
+		"Time",
+		"Level",
+		"Word"
+	};
+
+	std::pair<SHORT, SHORT > OptionPos[INPUT + 1] =
+	{
+		{x + dx / 3, y + 2},
+		{x + dx * 2 / 3, y + 2},
+		{x + dx * 2 / 7, y + dy - 3 },
+	};
+
+	DrawGameFrame(hStdOut, srW, x, y, dx, dy);
+
+	for (int i = TIME; i <= INPUT; i++)
+		WriteConsoleOutputCharacter(hStdOut, OptionStr[i], static_cast<SHORT>(std::strlen(OptionStr[i])), {OptionPos[i].first - static_cast<SHORT>(std::strlen(OptionStr[i])), OptionPos[i].second}, &written);
+	
+	ShowGameHelpMsgBox(hStdOut, hStdIn, x, y, dx, dy);
+
+	CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+	// 
+	acc_sys->set_current_user();
+	//
+	bool is_back = false;
+	INPUT_RECORD irKb[12];
+	DWORD wNumber;
+	std::string input_str;
+	std::string cntdn_str;
+	std::string name = acc_sys->get_current_user_str();
+	Player &player = acc_sys->get_ref_player(name);
+	int current_level = player.get_level_passed() + 1;
+	current_level = 70;
+
+	while (!is_back)
+	{
+		double time_cost = 0.0;
+		int total_difficulty = 0;
+		int round = get_round(current_level);
+		int countdown = get_round_time(current_level);
+		std::string level_str = std::to_string(current_level);
+		bool is_fail = false;
+
+		while (round-- && !is_fail)
+		{
+			Word game_word = word_list->get_word(current_level);
+			std::string game_word_str = game_word.word;
+			cntdn_str = std::to_string(countdown);
+			input_str.clear();
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			WriteConsoleOutputCharacter(hStdOut, space_array, static_cast<SHORT>(level_str.size()), {OptionPos[LEVEL].first + 1, OptionPos[LEVEL].second}, &written);
+			WriteConsoleOutputCharacter(hStdOut, level_str.c_str(), static_cast<SHORT>(level_str.size()), {OptionPos[LEVEL].first + 1, OptionPos[LEVEL].second}, &written);
+			WriteConsoleOutputCharacter(hStdOut, space_array, 6, {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
+			WriteConsoleOutputCharacter(hStdOut, cntdn_str.c_str(), static_cast<SHORT>(cntdn_str.size()), {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
+
+			ShowGameWord(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second, game_word_str);
+
+			for (int i = countdown; i > 0; )
+			{
+				i -= 43;
+				if (i < 0)
+					i = 0;
+				cntdn_str = std::to_string(i);
+				WriteConsoleOutputCharacter(hStdOut, space_array, 6, {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
+				WriteConsoleOutputCharacter(hStdOut, cntdn_str.c_str(), static_cast<SHORT>(cntdn_str.size()), {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
+				Sleep(43);
+			}
+
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1, OptionPos[INPUT].second});
+			set_cursor_visible(hStdOut, TRUE);
+
+			bool is_break = false;
+			RidKeyInput(hStdIn);
+			auto start = std::chrono::system_clock::now();
+			while (!is_break)
+			{
+				if (ReadConsoleInput(hStdIn, irKb, 12, &wNumber) == FALSE)
+				{
+					DWORD last_error = GetLastError();
+					ErrorMsg("Show welcome page failed", last_error);
+					Log::WriteLog(std::string("ConIO: Show welcome page failed: cannot read console input, errorcode: ") + std::to_string(last_error));
+					return last_error;
+				}
+
+				for (DWORD i = 0; i < wNumber; i++)
+				{
+					if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown)
+					{
+						if (std::isalpha(irKb[i].Event.KeyEvent.uChar.AsciiChar) && input_str.size() < 25)
+						{
+							char temp_input = irKb[i].Event.KeyEvent.uChar.AsciiChar;
+							WriteConsoleOutputCharacter(hStdOut, &temp_input, 1, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second}, &written);
+							input_str.push_back(temp_input);
+							SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second});
+						}
+						switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
+						{
+						case VK_RETURN:
+							if (input_str.size())
+							{
+								WriteConsoleOutputCharacter(hStdOut, space_array, static_cast<SHORT>(input_str.size()), {OptionPos[INPUT].first + 1, OptionPos[INPUT].second}, &written);
+								set_cursor_visible(hStdOut, FALSE);
+								is_break = true;
+							}
+							break;
+						case VK_BACK:
+							if (input_str.size())
+							{
+								WriteConsoleOutputCharacter(hStdOut, " ", 1, {OptionPos[INPUT].first + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second}, &written);
+								input_str.pop_back();
+								SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second});
+							}
+							break;
+						default:
+							break;
+						}
+					}
+				}
+			}
+			auto end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed_seconds = end - start;
+			time_cost += elapsed_seconds.count() * 1000.0;
+			if (input_str == game_word_str)
+			{
+				total_difficulty += game_word.difficulty;
+			}
+			else
+			{
+				is_fail = true;
+			}
+		}
+		if (is_fail)
+		{
+			ShowLevelFailMsgBox(hStdOut, hStdIn, x, y, dx, dy, is_back);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+		}
+		else
+		{
+			int lv_before = player.get_level();
+			int gain_exp = get_gain_exp(current_level, time_cost, total_difficulty);
+			player.raise_exp_(gain_exp);
+			player.inc_level_passed();
+			int lv_after = player.get_level();
+			current_level++;
+			ShowLevelPassMsgBox(hStdOut, hStdIn, x, y, dx, dy, is_back, !(lv_before == lv_after), gain_exp);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+		}
+	}
+	next_page = P_MENU;
+
+	SetConsoleMode(hStdOut, dwOldConsoleMode);
+	set_cursor_visible(hStdOut, TRUE);
+	return ERROR_SUCCESS;
+}
+
 
 

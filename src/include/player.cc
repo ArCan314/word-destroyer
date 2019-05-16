@@ -6,6 +6,7 @@
 #include "player.h"
 #include "contributor.h"
 #include "log.h"
+#include "game.h"
 
 Player::Player(std::ifstream &ifs) : User(ifs), exp_(double(0.0)), level_passed_(int(0))
 {
@@ -40,4 +41,10 @@ bool Player::Load(std::ifstream &ifs)
     ifs.read(reinterpret_cast<char *>(&this->level_passed_), sizeof(level_passed_));
 
     return !ifs.fail();
+}
+
+void Player::inc_level()
+{
+	if (exp_ > get_level_up_bound(level_, USERTYPE_P))
+		level_++;
 }

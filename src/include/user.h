@@ -36,6 +36,7 @@ public:
 
     unsigned get_level() const { return level_; }
 
+	virtual void inc_level() = 0;
     virtual bool Save(std::ofstream &ofs) const;
     virtual bool Load(std::ifstream &ifs);
 

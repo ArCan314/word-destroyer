@@ -71,10 +71,10 @@ public:
 	// DEBUG MEMBERS
 	void set_current_user() 
 	{
-		if (contributors_.size())
-			current_user_str_ = contributors_.front().get_user_name();
-		else if (players_.size())
+		if (players_.size())
 			current_user_str_ = players_.front().get_user_name();
+		else if (contributors_.size())
+			current_user_str_ = contributors_.front().get_user_name();
 	}
 
 private:
