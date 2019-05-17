@@ -51,6 +51,8 @@
         "chrono": "cpp",
         "ctime": "cpp",
         "ratio": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "iterator": "cpp",
+        "*.rh": "cpp"
     },
 }

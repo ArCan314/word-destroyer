@@ -20,6 +20,7 @@ void Contributor::from_player(const Player &player)
 	User::operator=(player);
 	user_type_ = UserType::USERTYPE_C;
 	word_contributed_ = 0;
+	level_ = 0;
 }
 
 bool Contributor::Save(std::ofstream &ofs) const
@@ -40,6 +41,10 @@ bool Contributor::Load(std::ifstream &ifs)
 
 void Contributor::inc_level()
 {
-	if (word_contributed_ > get_level_up_bound(level_, USERTYPE_C))
-		level_++;
+	for (int i = 0; i < get_max_level(); i++)
+		if (word_contributed_ < get_level_up_bound(i, USERTYPE_C))
+		{
+			level_ = i;
+			break;
+		}
 }

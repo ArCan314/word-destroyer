@@ -14,7 +14,10 @@ static void init_level_table()
 
 	for (int i = 1; i < max_lv; i++)
 	{
-		player_exp_table[i] = player_exp_table[i - 1] * 1.2;
+		if (i < 20)
+			player_exp_table[i] = player_exp_table[i - 1] + 20ll * i;
+		else
+			player_exp_table[i] = player_exp_table[i - 1] * 1.08;
 		if (i < 10)
 			contributor_level_table[i] = contributor_level_table[i - 1] + 2;
 		else
@@ -38,7 +41,7 @@ long long get_level_up_bound(int level, UserType utype)
 
 double get_gain_exp(int level, double time, int difficulty)
 {
-	return std::pow(1.02, level + 20000.0 / (time + 1000))  + std::pow(1.2 , difficulty) ;
+	return std::pow(1.1, level + (20000.0 + time) / (time + 1000))  + difficulty * std::pow(1.1 , difficulty) * 20000.0 / (time + 15000);
 }
 
 int get_max_level()

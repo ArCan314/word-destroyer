@@ -80,7 +80,7 @@ int main()
 	InitConsole();
 	ConsoleIO::set_account_sys_ptr(&acc_sys);
 	ConsoleIO::set_wordlist_ptr(&word_list);
-	ConsoleIO::IOD_Start();
+	ConsoleIO::IO_Start();
 
 	// std::cin >> std::string();
 	Log::CloseLog();

@@ -22,7 +22,7 @@ void Player::from_contributor(const Contributor &con)
 	user_type_ = UserType::USERTYPE_P;
 	exp_ = 0.0;
 	level_passed_ = 0;
-
+	level_ = 0;
 }
 
 bool Player::Save(std::ofstream &ofs) const
@@ -45,6 +45,10 @@ bool Player::Load(std::ifstream &ifs)
 
 void Player::inc_level()
 {
-	if (exp_ > get_level_up_bound(level_, USERTYPE_P))
-		level_++;
+	for (int i = 0; i < get_max_level(); i++)
+		if (exp_ < get_level_up_bound(i, USERTYPE_P))
+		{
+			level_ = i;
+			break;
+		}
 }

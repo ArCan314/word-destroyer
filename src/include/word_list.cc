@@ -40,9 +40,24 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
 const Word &WordList::get_word(int level)
 {
     static std::random_device r;
-	int max_stage = get_max_stage();
-	int increasement = word_set_.size() / max_stage;
-	std::uniform_int_distribution<int> uni_rd((level - 1) * increasement, increasement * level);
+	int min_diff = 0;
+	int max_diff = diff_vec_.size() - 1;
+	int diff = level / 6;
+	int diff_lb = diff - 5;
+	int diff_ub = diff + 2;
+	int lb, ub;
+	if (diff_lb > max_diff)
+	{
+		lb = max_diff - 5;
+		ub = max_diff;
+	}
+	else
+	{
+		lb = (diff_lb > min_diff) ? diff_lb : min_diff;
+		ub = (diff_ub < max_diff) ? diff_ub : max_diff;
+	}
+
+	std::uniform_int_distribution<int> uni_rd(diff_vec_[lb], diff_vec_[ub]);
 	return word_vec_.at(uni_rd(r));
 	/*
 	if (level <= 60)
@@ -168,7 +183,7 @@ int WordList::get_difficulty(const std::string &word)
 		}
 	}
 
-	double difficulty = len + change_time + (upper - lower) * 0.1;
+	double difficulty = len + change_time * 0.5 + (upper - lower) * 0.3;
 
     return difficulty;
 }
@@ -194,6 +209,16 @@ bool WordList::Load()
         }
         last_origin_ = word_vec_.size();
 		std::sort(word_vec_.begin(), word_vec_.end(), [](const Word & a, const Word & b) { return a.difficulty < b.difficulty; });
+		std::set<int> diff_set;
+		for (std::size_t i = 0; i < word_vec_.size(); i++)
+		{
+			int temp_diff = word_vec_.at(i).difficulty;
+			if (!diff_set.count(temp_diff))
+			{
+				diff_set.insert(temp_diff);
+				diff_vec_.push_back(i);
+			}
+		}
         return true;
     }
     else

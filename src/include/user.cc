@@ -96,6 +96,7 @@ bool User::Load(std::ifstream &ifs)
 
     for (unsigned i = 0; i < temp.pswd_len; i++)
         pswd_.push_back(temp.pswd[i]);
+	level_ = temp.level;
 
     delete[] temp.name;
     delete[] temp.pswd;

@@ -22,24 +22,30 @@
 #include "word_list.h"
 #include "game.h"
 
+enum NextPage;
+enum SortSelection;
+struct FilterPack;
+
+// 设置字体和背景的颜色
 static const int FOREGROUND_WHITE = (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN);
 static const int BACKGROUND_WHITE = (BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED);
 
-static AccountSys * acc_sys;
-static WordList * word_list;
+// 提供账号管理及单词查询
+static AccountSys *acc_sys;
+static WordList *word_list;
 
 static COORD coordOrigincsbiSize = {151, 9000};
-static bool is_fullscreen = false;
-static bool has_scrollbar = true;
+static bool is_fullscreen = false; // unused
+static bool has_scrollbar = true;  // 记录是否有滚动栏
 
 static const int kAttrBufSize = 120;
 static bool attr_inited = false;
 static WORD attribute_fwhite[kAttrBufSize];
 static WORD attribute_bwhite[kAttrBufSize];
 static WORD attribute_fred[kAttrBufSize];
-
 static char space_array[kAttrBufSize];
 
+// 对attribution数组的初始化
 void ConsoleIO::InitAttr()
 {
 	if (!attr_inited)
@@ -55,30 +61,58 @@ void ConsoleIO::InitAttr()
 	}
 }
 
+static void Shine(HANDLE h, SHORT len, COORD pos);
+static DWORD set_cursor_visible(HANDLE h, BOOL visible);
+static void ErrorMsg(const std::string &msg, DWORD last_error);
+static DWORD press_alt_enter(); // not used
+static void DrawUserList(HANDLE h, const std::vector<Player> &p_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> &sidex, const SMALL_RECT &srW, int page);
+static void DrawUserList(HANDLE h, const std::vector<Contributor> &c_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> &sidex, const SMALL_RECT &srW, int page);
+static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> &sidex, SMALL_RECT srW, UserType utype, SortSelection &s_sel);
+static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> &sidex, SMALL_RECT srW, UserType utype, FilterPack &f_pack);
+static DWORD ShowGameHelpMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy);
+static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy, bool &is_back, bool lv_up, int gain_exp);
+static DWORD ShowLevelFailMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT dx, SHORT dy, bool &is_back);
+static DWORD DrawGameFrame(HANDLE hOut, SMALL_RECT srW, SHORT x, SHORT y, SHORT dx, SHORT dy);
+static DWORD CleanGameBoard(HANDLE hOut, SHORT x, SHORT y, SHORT dx, SHORT dy);
+static void ShowGameWord(HANDLE hOut, SHORT x, SHORT y, SHORT dx, SHORT dy, const std::string &word);
+static void RidKeyInput(HANDLE hIn);
+
+// 闪烁效果
 static void Shine(HANDLE h, SHORT len, COORD pos)
 {
 	static DWORD written;
-	static constexpr int kShineTime = 7;
+	static constexpr int kShineTime = 7; // 为奇数以保证最后一次闪烁返回原来的状态一定是白底
+	static const WORD *attr_bf[2] = {attribute_fwhite, attribute_bwhite};
 	for (int i = 0; i < kShineTime; i++)
 	{
-		Sleep(50);
-		if (i % 2)
-			WriteConsoleOutputAttribute(h, attribute_bwhite, len, pos, &written);
-		else
-			WriteConsoleOutputAttribute(h, attribute_fwhite, len, pos, &written);
+		Sleep(50); // 足够大以保证刷新不引起闪屏
+		WriteConsoleOutputAttribute(h, attr_bf[i % 2], len, pos, &written);
 	}
 }
 
-static DWORD press_alt_enter();
+// 设置光标的可见性
 static DWORD set_cursor_visible(HANDLE h, BOOL visible)
 {
 	CONSOLE_CURSOR_INFO cci;
-	GetConsoleCursorInfo(h, &cci);
+	if (GetConsoleCursorInfo(h, &cci) == FALSE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("ConIO: set cursor visibility failed", last_error);
+		Log::WriteLog(std::string("ConIO: set cursor visibility failed : cannot get console cursor info, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
 	cci.bVisible = visible;
-	SetConsoleCursorInfo(h, &cci);
+	if (SetConsoleCursorInfo(h, &cci) == FALSE)
+	{
+		DWORD last_error = GetLastError();
+		ErrorMsg("ConIO: set cursor visibility failed", last_error);
+		Log::WriteLog(std::string("ConIO: set cursor visibility failed : cannot set console cursor info, errorcode: ") + std::to_string(last_error));
+		return last_error;
+	}
 	return ERROR_SUCCESS;
 }
 
+// 提供错误信息打印
 static void ErrorMsg(const std::string &msg, DWORD last_error)
 {
 	std::cerr << msg << " ErrorCode: " << last_error << std::endl;
@@ -93,7 +127,6 @@ void ConsoleIO::set_wordlist_ptr(WordList *wl)
 {
 	word_list = wl;
 }
-
 
 enum NextPage
 {
@@ -115,8 +148,6 @@ enum SortSelection
 	SORTS_CON
 };
 
-
-
 struct FilterPack
 {
 	enum FilterPackType
@@ -132,13 +163,15 @@ struct FilterPack
 	double exp;
 };
 
+// 提供页面跳转
 DWORD ConsoleIO::IO_Start()
 {
 	DWORD dwErrCode;
-	NextPage np;
+	NextPage next_page;
 	bool is_exit = false;
+	Log::WriteLog(std::string("ConIO: CLI START"));
 	dwErrCode = to_welcome_page();
-	np = P_MENU;
+	next_page = P_MENU;
 	if (dwErrCode != ERROR_SUCCESS)
 		return dwErrCode;
 
@@ -146,37 +179,37 @@ DWORD ConsoleIO::IO_Start()
 
 	while (!is_exit)
 	{
-		switch (np)
+		switch (next_page)
 		{
 		case P_WELCOME:
 			dwErrCode = to_welcome_page();
 			if (dwErrCode)
 				return dwErrCode;
 			else
-				np = P_MENU;
+				next_page = P_MENU;
 			clear_screen();
 			break;
 		case P_SP:
-			if (acc_sys->get_current_usertype() == USERTYPE_C)
-				dwErrCode = to_contributor_play_page(np);
+			if (acc_sys->get_current_usertype() == USERTYPE_C) // 根据用户类型选择进入的页面
+				dwErrCode = to_contributor_play_page(next_page);
 			else
-				dwErrCode = to_player_play_page(np);
+				dwErrCode = to_player_play_page(next_page);
 			clear_screen();
 			break;
 		case P_MENU:
-			dwErrCode = to_menu_page(np);
+			dwErrCode = to_menu_page(next_page);
 			if (dwErrCode)
 				return dwErrCode;
 			clear_screen();
 			break;
 		case P_INFO:
-			dwErrCode = to_my_info_page(np);
+			dwErrCode = to_my_info_page(next_page);
 			if (dwErrCode)
 				return dwErrCode;
 			clear_screen();
 			break;
 		case P_ULIST:
-			dwErrCode = to_user_list_page(np);
+			dwErrCode = to_user_list_page(next_page);
 			if (dwErrCode)
 				return dwErrCode;
 			clear_screen();
@@ -186,27 +219,33 @@ DWORD ConsoleIO::IO_Start()
 			is_exit = true;
 			break;
 		default:
+			next_page = P_MENU;
 			break;
 		}
 	}
+	Log::WriteLog("Console IO: Exiting");
 	return 0;
 }
 
+// 为debug提供单页面服务
 DWORD ConsoleIO::IOD_Start()
 {
-	NextPage np;
-	to_player_play_page(np);
+	NextPage next_page;
+	to_player_play_page(next_page);
 	return ERROR_SUCCESS;
 }
 
+// 设置初始窗口大小
 DWORD ConsoleIO::set_console_window_size()
 {
 	return set_console_window_size(150, 40);
 }
 
+// 设置窗口大小
 DWORD ConsoleIO::set_console_window_size(SHORT dwWidth, SHORT dwHeight)
 {
 	Log::WriteLog(std::string("ConIO: setting console window size, (width, height): (") + std::to_string(dwWidth) + ", " + std::to_string(dwHeight) + ")");
+
 	if (is_fullscreen)
 		return ERROR_SUCCESS;
 
@@ -232,9 +271,8 @@ DWORD ConsoleIO::set_console_window_size(SHORT dwWidth, SHORT dwHeight)
 
 	SMALL_RECT srWnd = csbiStdOut.srWindow;
 
-	if (dwHeight < csbiStdOut.dwMaximumWindowSize.Y - 1)
+	if (dwHeight < csbiStdOut.dwMaximumWindowSize.Y - 1) // 检测大小是否超过缓冲区大小
 	{
-
 		srWnd.Bottom = (dwHeight > csbiStdOut.dwMaximumWindowSize.Y - 1) ? csbiStdOut.dwMaximumWindowSize.Y - 1 : dwHeight;
 		srWnd.Right = (dwWidth > csbiStdOut.dwMaximumWindowSize.X - 1) ? csbiStdOut.dwMaximumWindowSize.X - 1 : dwWidth;
 
@@ -247,8 +285,6 @@ DWORD ConsoleIO::set_console_window_size(SHORT dwWidth, SHORT dwHeight)
 			return last_error;
 		}
 
-		// set console buffer size to a larger one
-
 		if (SetConsoleScreenBufferSize(hStdOut, {dwWidth + 1, (csbiStdOut.dwSize.Y > dwHeight) ? csbiStdOut.dwSize.Y : (dwHeight + 1)}) == FALSE)
 		{
 			DWORD last_error = GetLastError();
@@ -259,6 +295,7 @@ DWORD ConsoleIO::set_console_window_size(SHORT dwWidth, SHORT dwHeight)
 	}
 	else
 	{
+		// set console buffer size to a larger one
 		if (SetConsoleScreenBufferSize(hStdOut, {dwWidth + 1, (csbiStdOut.dwSize.Y > dwHeight) ? csbiStdOut.dwSize.Y : (dwHeight + 1)}) == FALSE)
 		{
 			DWORD last_error = GetLastError();
@@ -290,6 +327,7 @@ DWORD ConsoleIO::set_console_window_size(SHORT dwWidth, SHORT dwHeight)
 	return ERROR_SUCCESS;
 }
 
+// 设置背景
 DWORD ConsoleIO::set_console_background(WORD attribute)
 {
 	Log::WriteLog(std::string("ConIO: setting console background, attr: ") + std::to_string(attribute));
@@ -373,18 +411,19 @@ DWORD ConsoleIO::clear_screen()
 	return ERROR_SUCCESS;
 }
 
+// 模拟按键以实现全屏，未使用
 static DWORD press_alt_enter()
 {
 	INPUT inputTemp[2];
-
+	Log::WriteLog(std::string("ConIO: simulating keyboard press"));
 	KEYBDINPUT kbinputAlt = {0, MapVirtualKey(VK_MENU, MAPVK_VK_TO_VSC), KEYEVENTF_SCANCODE, 0, 0},
-		kbinputEnter = {0, MapVirtualKey(VK_RETURN, MAPVK_VK_TO_VSC), KEYEVENTF_SCANCODE, 0, 0};
+			   kbinputEnter = {0, MapVirtualKey(VK_RETURN, MAPVK_VK_TO_VSC), KEYEVENTF_SCANCODE, 0, 0};
 	int cbSize = sizeof(INPUT);
 
 	inputTemp[0].type = inputTemp[1].type = INPUT_KEYBOARD;
 	inputTemp[0].ki = kbinputAlt, inputTemp[1].ki = kbinputEnter;
 
-	if (SendInput(2, inputTemp, cbSize) == FALSE)
+	if (SendInput(2, inputTemp, cbSize) == FALSE) // 按下按键
 	{
 		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
@@ -393,8 +432,7 @@ static DWORD press_alt_enter()
 	}
 
 	inputTemp[0].ki.dwFlags = inputTemp[1].ki.dwFlags = KEYEVENTF_KEYUP | KEYEVENTF_SCANCODE;
-
-	if (SendInput(2, inputTemp, cbSize) == FALSE)
+	if (SendInput(2, inputTemp, cbSize) == FALSE) // 抬起按键
 	{
 		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
@@ -409,20 +447,20 @@ DWORD ConsoleIO::to_fullscreen()
 {
 	if (is_fullscreen)
 		return ERROR_SUCCESS;
+	Log::WriteLog(std::string("ConIO: set console to fullscreen mode"));
 
-	if (press_alt_enter() != ERROR_SUCCESS)
+	DWORD last_error = press_alt_enter();
+	if (last_error != ERROR_SUCCESS)
 	{
-		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
 		Log::WriteLog(std::string("ConIO: Change display mode failed: cannot send key event, errorcode: ") + std::to_string(last_error));
 		return last_error;
 	}
 
 	is_fullscreen = true;
-	Sleep(50);
-	if (disable_scrollbar() != ERROR_SUCCESS)
+	Sleep(50); // Sleep一段时间以确保全屏按键处理完毕
+	if ((last_error = disable_scrollbar()) != ERROR_SUCCESS)
 	{
-		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
 		Log::WriteLog(std::string("ConIO: Change display mode failed: cannot disable scrollbar, errorcode: ") + std::to_string(last_error));
 		return last_error;
@@ -435,6 +473,7 @@ DWORD ConsoleIO::disable_scrollbar()
 {
 	if (!has_scrollbar)
 		return ERROR_SUCCESS;
+	Log::WriteLog(std::string("ConIO: disabling scrollbar"));
 
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hStdOut == INVALID_HANDLE_VALUE)
@@ -471,14 +510,15 @@ DWORD ConsoleIO::disable_scrollbar()
 	return ERROR_SUCCESS;
 }
 
+// 从全屏返回窗口化
 DWORD ConsoleIO::to_window()
 {
 	if (!is_fullscreen)
 		return ERROR_SUCCESS;
-
-	if (press_alt_enter() != ERROR_SUCCESS)
+	Log::WriteLog(std::string("ConIO: set console to window mode"));
+	DWORD last_error = press_alt_enter();
+	if (last_error != ERROR_SUCCESS)
 	{
-		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
 		Log::WriteLog(std::string("ConIO: Change display mode failed: cannot send key event, errorcode: ") + std::to_string(last_error));
 		return last_error;
@@ -487,17 +527,15 @@ DWORD ConsoleIO::to_window()
 	Sleep(50);
 	is_fullscreen = false;
 
-	if (enable_scrollbar() != ERROR_SUCCESS)
+	if ((last_error == enable_scrollbar()) != ERROR_SUCCESS)
 	{
-		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
 		Log::WriteLog(std::string("ConIO: Change display mode failed: cannot enable scroll bar, errorcode: ") + std::to_string(last_error));
 		return last_error;
 	}
 
-	if (set_console_window_size() != ERROR_SUCCESS)
+	if ((last_error == set_console_window_size()) != ERROR_SUCCESS)
 	{
-		DWORD last_error = GetLastError();
 		ErrorMsg("Change display mode failed", last_error);
 		Log::WriteLog(std::string("ConIO: Change display mode failed: cannot set console window size, errorcode: ") + std::to_string(last_error));
 		return last_error;
@@ -508,8 +546,10 @@ DWORD ConsoleIO::to_window()
 
 DWORD ConsoleIO::enable_scrollbar()
 {
+
 	if (has_scrollbar)
 		return ERROR_SUCCESS;
+	Log::WriteLog(std::string("ConIO: enable scrollbar"));
 
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hStdOut == INVALID_HANDLE_VALUE)
@@ -532,7 +572,7 @@ DWORD ConsoleIO::enable_scrollbar()
 
 	csbiInfo.dwSize = coordOrigincsbiSize;
 
-	if (SetConsoleScreenBufferSize(hStdOut, csbiInfo.dwSize) == FALSE)
+	if (SetConsoleScreenBufferSize(hStdOut, csbiInfo.dwSize) == FALSE) // 通过改变缓冲区大小来控制滚动栏的显示
 	{
 		DWORD last_error = GetLastError();
 		ErrorMsg("Enable scrollbar failed", last_error);
@@ -591,38 +631,6 @@ DWORD ConsoleIO::write_console_in_colour(HANDLE hOut, COORD pos, const char *str
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::write_console_in_colour(HANDLE hOut, COORD pos, const wchar_t *wstr, WORD colour)
-{
-	DWORD written;
-	WriteConsoleOutputAttribute(hOut, &colour, std::wcslen(wstr), pos, &written);
-	WriteConsoleOutputCharacterW(hOut, wstr, std::wcslen(wstr), pos, &written);
-	return ERROR_SUCCESS;
-}
-
-/*
-DWORD ConsoleIO::to_welcome_page()
-{
-	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-	if (hStdOut == INVALID_HANDLE_VALUE)
-	{
-		DWORD last_error = GetLastError();
-		ErrorMsg("Show menu failed", last_error);
-		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get standard output handle");
-		return last_error;
-	}
-
-	if (GetConsoleScreenBufferInfo(hStdOut, &csbi) == FALSE)
-	{
-		DWORD last_error = GetLastError();
-		ErrorMsg("Show menu failed", last_error);
-		Log::WriteLog(std::string("ConIO: Show menu failed: cannot get console screen buffer info");
-		return last_error;
-	}
-}
-*/
-
 DWORD ConsoleIO::set_window_fixed()
 {
 	HWND consoleWindow = GetConsoleWindow();
@@ -641,7 +649,6 @@ DWORD ConsoleIO::set_window_fixed()
 		Log::WriteLog(std::string("ConIO: Set console window fixed failed: cannot set window attr, errorcode: ") + std::to_string(last_error));
 		return last_error;
 	}
-
 	return ERROR_SUCCESS;
 }
 
@@ -659,7 +666,8 @@ DWORD ConsoleIO::to_welcome_page()
 		SIGN,
 		INFO
 	};
-
+	auto inc = [](WelPos &a) { a = (a == SIGN) ? ACC : static_cast<WelPos>(a + 1); };
+	auto dec = [](WelPos &a) { a = (a == ACC) ? SIGN : static_cast<WelPos>(a - 1); };
 	if (hStdOut == INVALID_HANDLE_VALUE || hStdIn == INVALID_HANDLE_VALUE)
 	{
 		DWORD last_error = GetLastError();
@@ -676,16 +684,29 @@ DWORD ConsoleIO::to_welcome_page()
 		return last_error;
 	}
 
+	DWORD dwOldConsoleMode;
+	GetConsoleMode(hStdOut, &dwOldConsoleMode);
+	SetConsoleMode(hStdOut, ENABLE_PROCESSED_INPUT);
+
 	DWORD written;
 	SMALL_RECT srW = csbi.srWindow;
-	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
-	{
-		{srW.Right / 3, 12},						 // ACC
-		{srW.Right / 3, 15},						 // PAS
-		{srW.Right / 3 + std::strlen("Log in"), 19}, // LOG
-		{srW.Right * 4 / 7, 19},					 // SIGN
-		{srW.Right / 2, 23}							 // INFO
-	};
+	const char *OptionStr[INFO + 1] =
+		{
+			"Account",
+			"Password",
+			"Log in",
+			"Sign up",
+			"",
+		};
+
+	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[INFO + 1] =
+		{
+			{srW.Right / 3, 12},						 // ACC
+			{srW.Right / 3, 15},						 // PAS
+			{srW.Right / 3 + std::strlen("Log in"), 19}, // LOG
+			{srW.Right * 4 / 7, 19},					 // SIGN
+			{srW.Right / 2, 23},						 // INFO
+		};
 
 	for (SHORT row = 0; row < csbi.srWindow.Bottom; row++)
 		for (SHORT col = 0; col < csbi.srWindow.Right; col++)
@@ -699,28 +720,28 @@ DWORD ConsoleIO::to_welcome_page()
 				WriteConsoleOutputCharacter(hStdOut, charFill + std::rand() % (sizeof(charFill) - 1), 1, {col, row}, &written);
 			}
 
-			if (col == OptionPos[ACC].first - std::strlen("Account") && row == OptionPos[ACC].second)
-				WriteConsoleOutputCharacter(hStdOut, "Account", std::strlen("Account"), {col, row}, &written);
+			if (col == OptionPos[ACC].first - std::strlen(OptionStr[ACC]) && row == OptionPos[ACC].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[ACC], std::strlen(OptionStr[ACC]), {col, row}, &written);
 
-			if (col == OptionPos[PAS].first - std::strlen("Password") && row == OptionPos[PAS].second)
-				WriteConsoleOutputCharacter(hStdOut, "Password", std::strlen("Password"), {col, row}, &written);
+			if (col == OptionPos[PAS].first - std::strlen(OptionStr[PAS]) && row == OptionPos[PAS].second)
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[PAS], std::strlen(OptionStr[PAS]), {col, row}, &written);
 
 			if (col == OptionPos[LOG].first && row == OptionPos[LOG].second)
-				WriteConsoleOutputCharacter(hStdOut, "Log in", std::strlen("Log in"), {col, row}, &written);
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[LOG], std::strlen(OptionStr[LOG]), {col, row}, &written);
 
 			if (col == OptionPos[SIGN].first && row == OptionPos[SIGN].second)
-				WriteConsoleOutputCharacter(hStdOut, "Sign up", std::strlen("Sign up"), {col, row}, &written);
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[SIGN], std::strlen(OptionStr[SIGN]), {col, row}, &written);
 		}
 
-	SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 1, OptionPos[ACC].second});
+	WelPos mpos = ACC;
 	std::string account_name, password;
+
 	INPUT_RECORD irKb[12];
 	DWORD wNumber;
-	WelPos mpos = ACC;
-	DWORD dwOldConsoleMode;
+	std::string msg;
 	bool is_break = false;
-	GetConsoleMode(hStdOut, &dwOldConsoleMode);
-	SetConsoleMode(hStdOut, ENABLE_PROCESSED_INPUT);
+
+	SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 1, OptionPos[ACC].second});
 	set_cursor_visible(hStdOut, TRUE);
 	while (!is_break)
 	{
@@ -734,191 +755,135 @@ DWORD ConsoleIO::to_welcome_page()
 
 		for (DWORD i = 0; i < wNumber; i++)
 		{
-			switch (irKb[i].EventType)
+			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown == TRUE)
 			{
-			case KEY_EVENT:
-				if (irKb[i].Event.KeyEvent.bKeyDown == TRUE)
+				KEY_EVENT_RECORD ker = irKb[i].Event.KeyEvent;
+				CONSOLE_CURSOR_INFO cci;
+
+				if (std::isalnum(ker.uChar.AsciiChar))
 				{
-					KEY_EVENT_RECORD ker = irKb[i].Event.KeyEvent;
-					CONSOLE_CURSOR_INFO cci;
-
-					if (std::isalnum(ker.uChar.AsciiChar))
+					char input_char = ker.uChar.AsciiChar;
+					switch (mpos)
 					{
-						char input_char = ker.uChar.AsciiChar;
-						switch (mpos)
+					case ACC:
+						if (account_name.size() < 16)
 						{
-						case ACC:
-							if (account_name.size() < 16)
-							{
-								WriteConsoleOutputCharacter(hStdOut, &input_char, 1, {OptionPos[ACC].first + 1 + (SHORT)account_name.length(), OptionPos[ACC].second}, &written);
-								SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 2 + (SHORT)account_name.length(), OptionPos[ACC].second});
-								account_name.push_back(ker.uChar.AsciiChar);
-							}
-							break;
-						case PAS:
-							if (password.size() < 24)
-							{
-								WriteConsoleOutputCharacter(hStdOut, "*", 1, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second}, &written);
-								SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 2 + (SHORT)password.length(), OptionPos[PAS].second});
-								password.push_back(ker.uChar.AsciiChar);
-							}
-							break;
-						case LOG:
-							break;
-						case SIGN:
-							break;
-						default:
-							break;
+							WriteConsoleOutputCharacter(hStdOut, &input_char, 1, {OptionPos[ACC].first + 1 + (SHORT)account_name.length(), OptionPos[ACC].second}, &written);
+							SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 2 + (SHORT)account_name.length(), OptionPos[ACC].second});
+							account_name.push_back(ker.uChar.AsciiChar);
 						}
-					}
-					else if (ker.wVirtualKeyCode == VK_UP)
-					{
-						switch (mpos)
+						break;
+					case PAS:
+						if (password.size() < 24)
 						{
-						case ACC:
-							set_cursor_visible(hStdOut, FALSE);
-
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-							mpos = SIGN;
-							break;
-						case PAS:
-							SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 1 + (SHORT)account_name.length(), OptionPos[ACC].second});
-							mpos = ACC;
-							break;
-						case LOG:
+							WriteConsoleOutputCharacter(hStdOut, "*", 1, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second}, &written);
+							SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 2 + (SHORT)password.length(), OptionPos[PAS].second});
+							password.push_back(ker.uChar.AsciiChar);
+						}
+						break;
+					default:
+						break;
+					}
+				}
+				else
+				{
+					switch (ker.wVirtualKeyCode)
+					{
+					case VK_UP:
+						if (mpos == LOG || mpos == SIGN)
+						{
 							set_cursor_visible(hStdOut, TRUE);
-
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
 
 							SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second});
 							mpos = PAS;
-							break;
-						case SIGN:
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
-							mpos = LOG;
-							break;
-						default:
-							break;
 						}
-					}
-					else if (ker.wVirtualKeyCode == VK_DOWN)
-					{
-						switch (mpos)
+						else if (mpos == ACC)
 						{
-						case ACC:
-							SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second});
-							mpos = PAS;
-							break;
-						case PAS:
 							set_cursor_visible(hStdOut, FALSE);
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
+
+							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[LOG]), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
 							mpos = LOG;
-							break;
-						case LOG:
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-							mpos = SIGN;
-							break;
-						case SIGN:
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-							set_cursor_visible(hStdOut, TRUE);
+						}
+						else if (mpos == PAS)
+						{
 							SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 1 + (SHORT)account_name.length(), OptionPos[ACC].second});
 							mpos = ACC;
-							break;
-						default:
-							break;
 						}
-					}
-					else if (ker.wVirtualKeyCode == VK_LEFT || ker.wVirtualKeyCode == VK_RIGHT)
-					{
-						switch (mpos)
+						break;
+					case VK_DOWN:
+						if (mpos == LOG || mpos == SIGN)
 						{
-						case ACC:
-							break;
-						case PAS:
-							break;
-						case LOG:
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-							mpos = SIGN;
-							break;
-						case SIGN:
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
-							mpos = LOG;
-							break;
-						default:
-							break;
-						}
-					}
-					else if (ker.wVirtualKeyCode == VK_RETURN)
-					{
-						switch (mpos)
-						{
-						case ACC:
-							break;
-						case PAS:
-							break;
-						case LOG:
-							Shine(hStdOut, std::strlen("Log In"), {OptionPos[LOG].first, OptionPos[LOG].second});
+							set_cursor_visible(hStdOut, TRUE);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
 
+							SetConsoleCursorPosition(hStdOut, {OptionPos[ACC].first + 1 + (SHORT)account_name.length(), OptionPos[ACC].second});
+							mpos = ACC;
+						}
+						else if (mpos == ACC)
+						{
+							SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second});
+							mpos = PAS;
+						}
+						else if (mpos == PAS)
+						{
+							set_cursor_visible(hStdOut, FALSE);
+							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[LOG]), {OptionPos[LOG].first, OptionPos[LOG].second}, &written);
+							mpos = LOG;
+						}
+						break;
+					case VK_LEFT:
+					case VK_RIGHT:
+						if (mpos == LOG || mpos == SIGN)
+						{
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
+							mpos = (mpos == LOG) ? SIGN : LOG;
+							WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
+						}
+						break;
+					case VK_RETURN:
+						switch (mpos)
+						{
+						case LOG:
+							Shine(hStdOut, std::strlen(OptionStr[LOG]), {OptionPos[LOG].first, OptionPos[LOG].second});
 							if (account_name.length() < acc_sys->get_min_acc_len())
-							{
-								char msg[] = "Account must have 4 characters at least.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - srW.Left - 2, {srW.Left + 1, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Account must have 4 characters at least.";
 							else if (password.length() < acc_sys->get_min_pswd_len())
-							{
-								char msg[] = "Password must have 9 characters at least.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - srW.Left - 2, {srW.Left + 1, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Password must have 9 characters at least.";
 							else if (!acc_sys->LogIn(account_name, password))
-							{
-								char msg[] = "Failed to log in, check your account name and password.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - srW.Left - 2, {srW.Left + 1, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Failed to log in, check your account name and password.";
 							else
-							{
 								is_break = true;
+
+							if (!is_break)
+							{
+								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - srW.Left - 2, {srW.Left + 1, OptionPos[INFO].second}, &written);
+								WriteConsoleOutputCharacter(hStdOut, msg.c_str(), std::strlen(msg.c_str()), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg.c_str())) / 2, OptionPos[INFO].second}, &written);
 							}
 							break;
 						case SIGN:
-							Shine(hStdOut, std::strlen("Sign Up"), {OptionPos[SIGN].first, OptionPos[SIGN].second});
-
+							Shine(hStdOut, std::strlen(OptionStr[SIGN]), {OptionPos[SIGN].first, OptionPos[SIGN].second});
 							if (account_name.length() < acc_sys->get_min_acc_len())
-							{
-								char msg[] = "Account must have 4 characters at least.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - OptionPos[INFO].first + static_cast<SHORT>(std::strlen(msg)) / 2 - 1, {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Account must have 4 characters at least.";
 							else if (password.length() < acc_sys->get_min_pswd_len())
-							{
-								char msg[] = "Password must have 9 characters at least.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - OptionPos[INFO].first + static_cast<SHORT>(std::strlen(msg)) / 2 - 1, {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Password must have 9 characters at least.";
 							else if (!acc_sys->SignUp(account_name, password, UserType::USERTYPE_C))
-							{
-								char msg[] = "Sign up failed, account name has been used.";
-								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - OptionPos[INFO].first + static_cast<SHORT>(std::strlen(msg)) / 2 - 1, {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-								WriteConsoleOutputCharacter(hStdOut, msg, std::strlen(msg), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg)) / 2, OptionPos[INFO].second}, &written);
-							}
+								msg = "Sign up failed, account name has been used.";
 							else
-							{
 								is_break = true;
+
+							if (!is_break)
+							{
+								WriteConsoleOutputCharacter(hStdOut, space_array, srW.Right - srW.Left - 2, {srW.Left + 1, OptionPos[INFO].second}, &written);
+								WriteConsoleOutputCharacter(hStdOut, msg.c_str(), std::strlen(msg.c_str()), {OptionPos[INFO].first - static_cast<SHORT>(std::strlen(msg.c_str())) / 2, OptionPos[INFO].second}, &written);
 							}
+
 							break;
 						default:
 							break;
 						}
-					}
-					else if (ker.wVirtualKeyCode == VK_BACK)
-					{
+						break;
+					case VK_BACK:
 						switch (mpos)
 						{
 						case ACC:
@@ -937,18 +902,14 @@ DWORD ConsoleIO::to_welcome_page()
 								SetConsoleCursorPosition(hStdOut, {OptionPos[PAS].first + 1 + (SHORT)password.length(), OptionPos[PAS].second});
 							}
 							break;
-						case LOG:
-							break;
-						case SIGN:
-							break;
 						default:
 							break;
 						}
+						break;
+					default:
+						break;
 					}
 				}
-				break;
-			default:
-				break;
 			}
 		}
 	}
@@ -958,7 +919,7 @@ DWORD ConsoleIO::to_welcome_page()
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::to_menu_page(NextPage & next_page)
+DWORD ConsoleIO::to_menu_page(NextPage &next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -973,7 +934,8 @@ DWORD ConsoleIO::to_menu_page(NextPage & next_page)
 		USER_LIST,
 		EXIT
 	};
-
+	auto inc = [](MenuPos &a) { a = (a == EXIT) ? START_SINGLE : static_cast<MenuPos>(a + 1); };
+	auto dec = [](MenuPos &a) { a = (a == START_SINGLE) ? EXIT : static_cast<MenuPos>(a - 1); };
 	if (hStdOut == INVALID_HANDLE_VALUE || hStdIn == INVALID_HANDLE_VALUE)
 	{
 		DWORD last_error = GetLastError();
@@ -996,31 +958,37 @@ DWORD ConsoleIO::to_menu_page(NextPage & next_page)
 
 	DWORD written;
 	SMALL_RECT srW = csbi.srWindow;
-	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
-	{
-		{srW.Right / 2, srW.Bottom * 1 / 6}, // START_SINGLE
-		{srW.Right / 2, srW.Bottom * 2 / 6}, // START_MULTIPLE
-		{srW.Right / 2, srW.Bottom * 3 / 6}, // MY_INFO
-		{srW.Right / 2, srW.Bottom * 4 / 6}, // USER_LIST
-		{srW.Right / 2, srW.Bottom * 5 / 6}, // EXIT
-	};
+
+	SHORT x = srW.Right / 3;
+	SHORT y = srW.Top;
+	SHORT dx = srW.Right / 3;
+	SHORT dy = (srW.Bottom - 1) - y;
 
 	const char *OptionStr[EXIT + 1] =
-	{
-		"Play Offline",
-		"Play Online",
-		"My Infomation",
-		"Other Players",
-		"Exit"};
+		{
+			"Play Offline",
+			"Play Online",
+			"My Infomation",
+			"Other Players",
+			"Exit"};
+
+	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
+		{
+			{x + dx * 1 / 2, y + dy * 1 / 6}, // START_SINGLE
+			{x + dx * 1 / 2, y + dy * 2 / 6}, // START_MULTIPLE
+			{x + dx * 1 / 2, y + dy * 3 / 6}, // MY_INFO
+			{x + dx * 1 / 2, y + dy * 4 / 6}, // USER_LIST
+			{x + dx * 1 / 2, y + dy * 5 / 6}, // EXIT
+		};
 
 	for (SHORT row = 0; row < srW.Bottom; row++)
 		for (SHORT col = 0; col < srW.Right; col++)
 		{
-			if (col < srW.Right / 3 || col > srW.Right * 2 / 3)
+			if (col < x || col > x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "%", 1, {col, row}, &written);
-			else if (col == srW.Right / 3 || col == srW.Right * 2 / 3)
+			else if (col == x || col == x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row}, &written);
-			else if (row == 0 || row == srW.Bottom - 1)
+			else if (row == y || row == y + dy)
 				WriteConsoleOutputCharacter(hStdOut, "$", 1, {col, row}, &written);
 			else if (row == OptionPos[START_SINGLE].second ||
 					 row == OptionPos[START_MULT].second ||
@@ -1031,27 +999,15 @@ DWORD ConsoleIO::to_menu_page(NextPage & next_page)
 				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row - 1}, &written);
 				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row + 1}, &written);
 			}
-
-			if (row == OptionPos[START_SINGLE].second && col == OptionPos[START_SINGLE].first)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[START_SINGLE], std::strlen(OptionStr[START_SINGLE]), {col - static_cast<SHORT>(std::strlen(OptionStr[START_SINGLE])) / 2, row}, &written);
-
-			else if (row == OptionPos[START_MULT].second && col == OptionPos[START_MULT].first)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[START_MULT], std::strlen(OptionStr[START_MULT]), {col - static_cast<SHORT>(std::strlen(OptionStr[START_MULT])) / 2, row}, &written);
-
-			else if (row == OptionPos[MY_INFO].second && col == OptionPos[MY_INFO].first)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[MY_INFO], std::strlen(OptionStr[MY_INFO]), {col - static_cast<SHORT>(std::strlen(OptionStr[MY_INFO])) / 2, row}, &written);
-
-			else if (row == OptionPos[USER_LIST].second && col == OptionPos[USER_LIST].first)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[USER_LIST], std::strlen(OptionStr[USER_LIST]), {col - static_cast<SHORT>(std::strlen(OptionStr[USER_LIST])) / 2, row}, &written);
-
-			else if (row == OptionPos[EXIT].second && col == OptionPos[EXIT].first)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[EXIT], std::strlen(OptionStr[EXIT]), {col - static_cast<SHORT>(std::strlen(OptionStr[EXIT])) / 2, row}, &written);
 		}
+
+	for (int i = START_SINGLE; i <= EXIT; i++)
+		WriteConsoleOutputCharacter(hStdOut, OptionStr[i], std::strlen(OptionStr[i]), {OptionPos[i].first - static_cast<SHORT>(std::strlen(OptionStr[i])) / 2, OptionPos[i].second}, &written);
 
 	bool is_break = false;
 	MenuPos mpos = START_SINGLE;
 
-	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> side = {srW.Right / 3 + 1, srW.Right * 2 / 3 - 1};
+	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> side = {x + 1, x + dx - 1};
 	WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[START_SINGLE].second}, &written);
 
 	INPUT_RECORD irKb[12];
@@ -1073,105 +1029,38 @@ DWORD ConsoleIO::to_menu_page(NextPage & next_page)
 				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
 				{
 				case VK_UP:
-					switch (mpos)
-					{
-					case START_SINGLE:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[START_SINGLE].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[EXIT].second}, &written);
-						mpos = EXIT;
-						break;
-					case START_MULT:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[START_MULT].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[START_SINGLE].second}, &written);
-						mpos = START_SINGLE;
-						break;
-					case MY_INFO:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[MY_INFO].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[START_MULT].second}, &written);
-						mpos = START_MULT;
-						break;
-					case USER_LIST:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[USER_LIST].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[MY_INFO].second}, &written);
-						mpos = MY_INFO;
-						break;
-					case EXIT:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[EXIT].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[USER_LIST].second}, &written);
-						mpos = USER_LIST;
-						break;
-					default:
-						break;
-					}
+					WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[mpos].second}, &written);
+					dec(mpos);
+					WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[mpos].second}, &written);
 					break;
 				case VK_DOWN:
-					switch (mpos)
-					{
-					case START_SINGLE:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[START_SINGLE].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[START_MULT].second}, &written);
-						mpos = START_MULT;
-						break;
-					case START_MULT:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[START_MULT].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[MY_INFO].second}, &written);
-						mpos = MY_INFO;
-						break;
-					case MY_INFO:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[MY_INFO].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[USER_LIST].second}, &written);
-						mpos = USER_LIST;
-						break;
-					case USER_LIST:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[USER_LIST].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[EXIT].second}, &written);
-						mpos = EXIT;
-						break;
-					case EXIT:
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[EXIT].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[START_SINGLE].second}, &written);
-						mpos = START_SINGLE;
-						break;
-					default:
-						break;
-					}
+					WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, side.second - side.first, {side.first, OptionPos[mpos].second}, &written);
+					inc(mpos);
+					WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, side.second - side.first, {side.first, OptionPos[mpos].second}, &written);
 					break;
 				case VK_RETURN:
 					switch (mpos)
 					{
 					case START_SINGLE:
 						next_page = P_SP;
-						is_break = true;
-						Shine(hStdOut, side.second - side.first, {side.first, OptionPos[START_SINGLE].second});
-
 						break;
 					case START_MULT:
 						next_page = P_MP;
-						is_break = true;
-						Shine(hStdOut, side.second - side.first, {side.first, OptionPos[START_MULT].second});
-
 						break;
 					case MY_INFO:
 						next_page = P_INFO;
-						is_break = true;
-						Shine(hStdOut, side.second - side.first, {side.first, OptionPos[MY_INFO].second});
-
 						break;
 					case USER_LIST:
 						next_page = P_ULIST;
-						is_break = true;
-						Shine(hStdOut, side.second - side.first, {side.first, OptionPos[USER_LIST].second});
-
 						break;
 					case EXIT:
 						next_page = P_EXIT;
-						is_break = true;
-						Shine(hStdOut, side.second - side.first, {side.first, OptionPos[EXIT].second});
-
 						break;
 					default:
 						break;
 					}
+					is_break = true;
+					Shine(hStdOut, side.second - side.first, {side.first, OptionPos[mpos].second});
 					break;
 				default:
 					break;
@@ -1186,7 +1075,7 @@ DWORD ConsoleIO::to_menu_page(NextPage & next_page)
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
+DWORD ConsoleIO::to_my_info_page(NextPage &next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -1233,46 +1122,46 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 	DWORD written;
 	SMALL_RECT srW = csbi.srWindow;
 
-	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> sidex = {srW.Right / 5 + 1, srW.Right * 4 / 5 - 1};
-	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> sidey = {srW.Top + 1, srW.Bottom - 1};
-
-	SHORT sidex_diff = sidex.second - sidex.first;
-	SHORT sidey_diff = sidey.second - sidey.first;
+	SHORT x = srW.Right / 5;
+	SHORT y = srW.Top;
+	SHORT dx = srW.Right * 3 / 5;
+	SHORT dy = srW.Bottom - 1 - y;
 
 	const char *OptionStr[INFO + 1] =
-	{
-		"Name:",
-		"Role:",
-		"Level:",
-		"Contributed:",
-		"XP:",
-		"Level passed:",
-		"Change my password",
-		"Change my role",
-		"Back to menu",
-		"info, don't use"};
+		{
+			"Name:",
+			"Role:",
+			"Level:",
+			"Contributed:",
+			"XP:",
+			"Level passed:",
+			"Change my password",
+			"Change my role",
+			"Back to menu",
+			"info, don't use"};
 
 	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
-	{
-		{sidex.first + sidex_diff * 1 / 4, sidey.first + sidey_diff * 1 / 5}, // NAME
-		//
-		{sidex.first + sidex_diff * 1 / 4, sidey.first + sidey_diff * 2 / 5}, // ROLE
-		{sidex.first + sidex_diff * 3 / 4, sidey.first + sidey_diff * 2 / 5}, // LEVEL
-		//
-		{sidex.first + sidex_diff * 1 / 4, sidey.first + sidey_diff * 3 / 5}, // CONTIBUTED
-		/**/
-		{sidex.first + sidex_diff * 1 / 4, sidey.first + sidey_diff * 3 / 5}, // EXP
-		{sidex.first + sidex_diff * 3 / 4, sidey.first + sidey_diff * 3 / 5}, // L_PASSED
-		//
-		{0 / 2, 0},																															// CHANGE_PSWD
-		{sidex.first + sidex_diff * 1 / 3 - static_cast<SHORT>(std::strlen(OptionStr[CHANGE_ROLE])) / 2, sidey.first + sidey_diff * 4 / 5}, // CHANGE_ROLE
-		{sidex.first + sidex_diff * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, sidey.first + sidey_diff * 4 / 5},		// BACK
-		{sidex.first + sidex_diff * 1 / 2, sidey.first + sidey_diff * 9 / 10}																// INFO
-	};
+		{
+			{x + dx * 1 / 4, y + dy * 1 / 5}, // NAME
+			//
+			{x + dx * 1 / 4, y + dy * 2 / 5}, // ROLE
+			{x + dx * 3 / 4, y + dy * 2 / 5}, // LEVEL
+			//
+			{x + dx * 1 / 4, y + dy * 3 / 5}, // CONTIBUTED
+			/**/
+			{x + dx * 1 / 4, y + dy * 3 / 5}, // EXP
+			{x + dx * 3 / 4, y + dy * 3 / 5}, // L_PASSED
+			//
+			{0 / 2, 0},																						// CHANGE_PSWD
+			{x + dx * 1 / 3 - static_cast<SHORT>(std::strlen(OptionStr[CHANGE_ROLE])) / 2, y + dy * 4 / 5}, // CHANGE_ROLE
+			{x + dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, y + dy * 4 / 5},		// BACK
+			{x + dx * 1 / 2, y + dy * 9 / 10}																// INFO
+		};
 
-// acc_sys->set_current_user();
+	// acc_sys->set_current_user();
 
-// Dont release temp_u
+	// Dont release temp_u
+
 	User *temp_u = nullptr;
 	std::unique_ptr<Player> temp_p(new Player);
 	std::unique_ptr<Contributor> temp_c(new Contributor);
@@ -1291,11 +1180,11 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 	for (SHORT row = 0; row < srW.Bottom; row++)
 		for (SHORT col = 0; col < srW.Right; col++)
 		{
-			if (col < srW.Right / 5 || col > srW.Right * 4 / 5)
+			if (col < x || col > x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "%", 1, {col, row}, &written);
-			else if (col == srW.Right / 5 || col == srW.Right * 4 / 5)
+			else if (col == x || col == x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row}, &written);
-			else if (row == 0 || row == srW.Bottom - 1)
+			else if (row == y || row == y + dy)
 				WriteConsoleOutputCharacter(hStdOut, "$", 1, {col, row}, &written);
 
 			if (col == OptionPos[NAME].first && row == OptionPos[NAME].second)
@@ -1377,34 +1266,17 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 			{
 				switch (irKb[i].Event.KeyEvent.wVirtualKeyCode)
 				{
-				case VK_LEFT: case VK_RIGHT:
-					switch (mpos)
+				case VK_LEFT:
+				case VK_RIGHT:
+					if (ack_change_role)
 					{
-					case CHANGE_ROLE:
-						if (ack_change_role)
-						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
-							ack_change_role = false;
-						}
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[CHANGE_ROLE]), {OptionPos[CHANGE_ROLE].first, OptionPos[CHANGE_ROLE].second}, &written);
-						mpos = BACK;
-						break;
-					case BACK:
-						if (ack_change_role)
-						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
-							ack_change_role = false;
-						}
-						WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[CHANGE_ROLE]), {OptionPos[CHANGE_ROLE].first, OptionPos[CHANGE_ROLE].second}, &written);
-						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second}, &written);
-						mpos = CHANGE_ROLE;
-						break;
-					default:
-						break;
+						WriteConsoleOutputCharacter(hStdOut, space_array, dx - 2, {x + 1, OptionPos[INFO].second}, &written);
+						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 2, {x + 1, OptionPos[INFO].second}, &written);
+						ack_change_role = false;
 					}
+					WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
+					mpos = (mpos == BACK) ? CHANGE_ROLE : BACK;
+					WriteConsoleOutputAttribute(hStdOut, attribute_fwhite, std::strlen(OptionStr[mpos]), {OptionPos[mpos].first, OptionPos[mpos].second}, &written);
 					break;
 				case VK_RETURN:
 					switch (mpos)
@@ -1415,15 +1287,15 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 							acc_sys->ChangeRole((*temp_u).get_user_name());
 							next_page = P_INFO;
 							is_break = true;
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, sidex_diff, {sidex.first, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, space_array, dx - 2, {x + 1, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 2, {x + 1, OptionPos[INFO].second}, &written);
 							Shine(hStdOut, std::strlen(OptionStr[CHANGE_ROLE]), {OptionPos[CHANGE_ROLE].first, OptionPos[CHANGE_ROLE].second});
 						}
 						else
 						{
 							std::string warning("WARNING: ALL DATA WOULD BE REESET, PRESS AGAIN TO CONTINUE.");
-							WriteConsoleOutputCharacter(hStdOut, warning.c_str(), warning.size(), {OptionPos[INFO].first - static_cast<SHORT>(warning.size()) / 2 , OptionPos[INFO].second}, &written);
-							WriteConsoleOutputAttribute(hStdOut, attribute_fred, warning.size(), {OptionPos[INFO].first - static_cast<SHORT>(warning.size()) / 2 , OptionPos[INFO].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, warning.c_str(), warning.size(), {OptionPos[INFO].first - static_cast<SHORT>(warning.size()) / 2, OptionPos[INFO].second}, &written);
+							WriteConsoleOutputAttribute(hStdOut, attribute_fred, warning.size(), {OptionPos[INFO].first - static_cast<SHORT>(warning.size()) / 2, OptionPos[INFO].second}, &written);
 							ack_change_role = true;
 						}
 						break;
@@ -1431,7 +1303,6 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 						next_page = P_MENU;
 						is_break = true;
 						Shine(hStdOut, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second});
-
 						break;
 					default:
 						break;
@@ -1449,7 +1320,7 @@ DWORD ConsoleIO::to_my_info_page(NextPage & next_page)
 	return ERROR_SUCCESS;
 }
 
-static void DrawUserList(HANDLE h, const std::vector<Player> & p_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> & sidex, const SMALL_RECT & srW, int page)
+static void DrawUserList(HANDLE h, const std::vector<Player> &p_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> &sidex, const SMALL_RECT &srW, int page)
 {
 	enum UListPos
 	{
@@ -1521,7 +1392,7 @@ static void DrawUserList(HANDLE h, const std::vector<Player> & p_vec, const char
 		}
 }
 
-static void DrawUserList(HANDLE h, const std::vector<Contributor> & c_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> & sidex, const SMALL_RECT & srW, int page)
+static void DrawUserList(HANDLE h, const std::vector<Contributor> &c_vec, const char *OptionStr[9 + 1], std::pair<SHORT, SHORT> OptionPos[9 + 1], const std::pair<SHORT, SHORT> &sidex, const SMALL_RECT &srW, int page)
 {
 	enum UListPos
 	{
@@ -1581,11 +1452,10 @@ static void DrawUserList(HANDLE h, const std::vector<Contributor> & c_vec, const
 				std::string xp_str = std::to_string(static_cast<int>((*beg).get_word_contributed()));
 				WriteConsoleOutputCharacter(h, xp_str.c_str(), xp_str.size(), {OptionPos[CON].first - static_cast<SHORT>(xp_str.size()) / 2, row}, &written);
 			}
-
 		}
 }
 
-static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> & sidex, SMALL_RECT srW, UserType utype, SortSelection & s_sel)
+static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> &sidex, SMALL_RECT srW, UserType utype, SortSelection &s_sel)
 {
 	enum SortMsgBox
 	{
@@ -1601,30 +1471,29 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 	};
 	SHORT sidex_diff = sidex.second - sidex.first;
 	std::pair<SHORT, SHORT> OptionPos[CON + 1] =
-	{
-		{sidex.first + sidex_diff / 3, srW.Bottom / 3},				// LU
-		{sidex.first + sidex_diff * 2 / 3, srW.Bottom / 3},			// RU
-		{sidex.first + sidex_diff / 3, srW.Bottom * 2 / 3},			// LD
-		{sidex.first + sidex_diff * 2 / 3, srW.Bottom * 2 / 3},		// RD
-		{0, 0},				// NAME
-		{0, 0},				// LEVEL
-		{0, 0},				// EXP
-		{0, 0},				// PASS
-		{0, 0},				// CON
-	};
+		{
+			{sidex.first + sidex_diff / 3, srW.Bottom / 3},			// LU
+			{sidex.first + sidex_diff * 2 / 3, srW.Bottom / 3},		// RU
+			{sidex.first + sidex_diff / 3, srW.Bottom * 2 / 3},		// LD
+			{sidex.first + sidex_diff * 2 / 3, srW.Bottom * 2 / 3}, // RD
+			{0, 0},													// NAME
+			{0, 0},													// LEVEL
+			{0, 0},													// EXP
+			{0, 0},													// PASS
+			{0, 0},													// CON
+		};
 
 	const char *OptionStr[CON + 1] =
-	{
-		"",
-		"",
-		"",
-		"",
-		"NAME",
-		"LV",
-		"XP",
-		"PASSED",
-		"WORD"
-	};
+		{
+			"",
+			"",
+			"",
+			"",
+			"NAME",
+			"LV",
+			"XP",
+			"PASSED",
+			"WORD"};
 
 	SHORT x = OptionPos[LU].first;
 	SHORT y = OptionPos[LU].second;
@@ -1635,8 +1504,6 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 	OptionPos[EXP] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 2};
 	OptionPos[PASS] = {x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 2};
 	OptionPos[CON] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 2};
-
-
 
 	DWORD written;
 
@@ -1673,18 +1540,15 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 			}
 		}
 
-
 	bool is_break = false;
-	auto inc = [&](SortMsgBox & a)
-	{
+	auto inc = [&](SortMsgBox &a) {
 		a = static_cast<SortMsgBox>(a + 1) > CON ? NAME : static_cast<SortMsgBox>(a + 1);
 		if (utype == USERTYPE_C)
 			a = (a == EXP) ? CON : a;
 		else
 			a = (a == CON) ? NAME : a;
 	};
-	auto dec = [&](SortMsgBox & a)
-	{
+	auto dec = [&](SortMsgBox &a) {
 		a = static_cast<SortMsgBox>(a - 1) < NAME ? CON : static_cast<SortMsgBox>(a - 1);
 		if (utype == USERTYPE_C)
 			a = (a == PASS) ? LEVEL : a;
@@ -1728,7 +1592,8 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 					WriteConsoleOutputAttribute(hOut, attribute_bwhite, std::strlen(OptionStr[mgpos]), {OptionPos[mgpos].first, OptionPos[mgpos].second}, &written);
 					is_break = true;
 					break;
-				default:break;
+				default:
+					break;
 				}
 			}
 		}
@@ -1736,7 +1601,7 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 	return ERROR_SUCCESS;
 }
 
-static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> & sidex, SMALL_RECT srW, UserType utype, FilterPack & f_pack)
+static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHORT> &sidex, SMALL_RECT srW, UserType utype, FilterPack &f_pack)
 {
 	enum SortMsgBox
 	{
@@ -1753,32 +1618,31 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 	};
 	SHORT sidex_diff = sidex.second - sidex.first;
 	std::pair<SHORT, SHORT> OptionPos[INBOX + 1] =
-	{
-		{sidex.first + sidex_diff / 4, srW.Bottom / 3},				// LU
-		{sidex.first + sidex_diff * 3 / 4, srW.Bottom / 3},			// RU
-		{sidex.first + sidex_diff / 4, srW.Bottom * 2 / 3},			// LD
-		{sidex.first + sidex_diff * 3 / 4, srW.Bottom * 2 / 3},		// RD
-		{0, 0},				// NAME
-		{0, 0},				// LEVEL
-		{0, 0},				// EXP
-		{0, 0},				// PASS
-		{0, 0},				// CON
-		{0, 0},				// INBOX
-	};
+		{
+			{sidex.first + sidex_diff / 4, srW.Bottom / 3},			// LU
+			{sidex.first + sidex_diff * 3 / 4, srW.Bottom / 3},		// RU
+			{sidex.first + sidex_diff / 4, srW.Bottom * 2 / 3},		// LD
+			{sidex.first + sidex_diff * 3 / 4, srW.Bottom * 2 / 3}, // RD
+			{0, 0},													// NAME
+			{0, 0},													// LEVEL
+			{0, 0},													// EXP
+			{0, 0},													// PASS
+			{0, 0},													// CON
+			{0, 0},													// INBOX
+		};
 
 	const char *OptionStr[INBOX + 1] =
-	{
-		"",
-		"",
-		"",
-		"",
-		"NAME",
-		"LV",
-		"XP",
-		"PASSED",
-		"WORD",
-		"Value"
-	};
+		{
+			"",
+			"",
+			"",
+			"",
+			"NAME",
+			"LV",
+			"XP",
+			"PASSED",
+			"WORD",
+			"Value"};
 
 	SHORT x = OptionPos[LU].first;
 	SHORT y = OptionPos[LU].second;
@@ -1789,7 +1653,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 	OptionPos[EXP] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 3};
 	OptionPos[PASS] = {x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 3};
 	OptionPos[CON] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 3};
-	OptionPos[INBOX] = {x + dx * 1 / 5 , y + dy * 3 / 4};
+	OptionPos[INBOX] = {x + dx * 1 / 5, y + dy * 3 / 4};
 
 	DWORD written;
 
@@ -1828,18 +1692,15 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 			}
 		}
 
-
 	bool is_break = false;
-	auto inc = [&](SortMsgBox & a)
-	{
+	auto inc = [&](SortMsgBox &a) {
 		a = static_cast<SortMsgBox>(a + 1) > CON ? NAME : static_cast<SortMsgBox>(a + 1);
 		if (utype == USERTYPE_C)
 			a = (a == EXP) ? CON : a;
 		else
 			a = (a == CON) ? NAME : a;
 	};
-	auto dec = [&](SortMsgBox & a)
-	{
+	auto dec = [&](SortMsgBox &a) {
 		a = static_cast<SortMsgBox>(a - 1) < NAME ? CON : static_cast<SortMsgBox>(a - 1);
 		if (utype == USERTYPE_C)
 			a = (a == PASS) ? LEVEL : a;
@@ -1916,14 +1777,16 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 								is_break = true;
 								set_cursor_visible(hOut, FALSE);
 								break;
-							case FilterPack::FPT_LV: case FilterPack::FPT_CON: case FilterPack::FPT_PASS:
+							case FilterPack::FPT_LV:
+							case FilterPack::FPT_CON:
+							case FilterPack::FPT_PASS:
 								try
 								{
 									f_pack.integer = std::stoi(inbox_str);
 									is_break = true;
 									set_cursor_visible(hOut, FALSE);
 								}
-								catch (const std::exception & e)
+								catch (const std::exception &e)
 								{
 									;
 								}
@@ -1935,15 +1798,15 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 									is_break = true;
 									set_cursor_visible(hOut, FALSE);
 								}
-								catch (const std::exception & e)
+								catch (const std::exception &e)
 								{
 									;
 								}
 								break;
-							default:break;
+							default:
+								break;
 							}
 						}
-
 					}
 					break;
 				case VK_BACK:
@@ -1957,7 +1820,8 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 						}
 					}
 					break;
-				default:break;
+				default:
+					break;
 				}
 			}
 		}
@@ -1965,7 +1829,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
+DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -2015,32 +1879,31 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 	SHORT sidex_diff = sidex.second - sidex.first;
 	SHORT sidey_diff = sidey.second - sidey.first;
 	const char *OptionStr[INFO + 1] =
-	{
-		"",
-		"Name",
-		"Level",
-		"XP",
-		"Passed",
-		"Words",
-		"Sort",
-		"Filter",
-		"Back",
-		""
-	};
+		{
+			"",
+			"Name",
+			"Level",
+			"XP",
+			"Passed",
+			"Words",
+			"Sort",
+			"Filter",
+			"Back",
+			""};
 
 	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
-	{
-		{sidex.first + sidex_diff * 1 / 2, sidey.first + 1},	// HEADER
-		{sidex.first + sidex_diff * 1 / 7, sidey.first + 3},	// NAME
-		{sidex.first + sidex_diff * 1 / 3, sidey.first + 3},	// LEVEL
-		{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},	// EXP
-		{sidex.first + sidex_diff * 4 / 5, sidey.first + 3},	// LP
-		{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},	// CON
-		{sidex.first + sidex_diff * 1 / 4 - static_cast<SHORT>(std::strlen(OptionStr[SORT])) / 2, sidey.second - 4},	// SORT
-		{sidex.first + sidex_diff * 2 / 4 - static_cast<SHORT>(std::strlen(OptionStr[FILTER])) / 2, sidey.second - 4},	// FILTER
-		{sidex.first + sidex_diff * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, sidey.second - 4},	// BACK
-		{sidex.first + sidex_diff * 1 / 2, sidey.second - 2},	// INFO
-	};
+		{
+			{sidex.first + sidex_diff * 1 / 2, sidey.first + 1},														   // HEADER
+			{sidex.first + sidex_diff * 1 / 7, sidey.first + 3},														   // NAME
+			{sidex.first + sidex_diff * 1 / 3, sidey.first + 3},														   // LEVEL
+			{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},														   // EXP
+			{sidex.first + sidex_diff * 4 / 5, sidey.first + 3},														   // LP
+			{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},														   // CON
+			{sidex.first + sidex_diff * 1 / 4 - static_cast<SHORT>(std::strlen(OptionStr[SORT])) / 2, sidey.second - 4},   // SORT
+			{sidex.first + sidex_diff * 2 / 4 - static_cast<SHORT>(std::strlen(OptionStr[FILTER])) / 2, sidey.second - 4}, // FILTER
+			{sidex.first + sidex_diff * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, sidey.second - 4},   // BACK
+			{sidex.first + sidex_diff * 1 / 2, sidey.second - 2},														   // INFO
+		};
 
 	for (SHORT row = 0; row < srW.Bottom; row++)
 		for (SHORT col = 0; col < srW.Right; col++)
@@ -2161,18 +2024,19 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 						break;
 					}
 					break;
-				case VK_UP: case VK_DOWN:
+				case VK_UP:
+				case VK_DOWN:
 					current_page = 1;
 					utype = (utype == USERTYPE_C) ? USERTYPE_P : USERTYPE_C;
 					if (utype == USERTYPE_C)
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
 					}
 					else
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
 					}
@@ -2183,30 +2047,30 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 						current_page--;
 						if (utype == USERTYPE_C)
 						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 							DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
 						}
 						else
 						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 							DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
 						}
 					}
 					break;
 				case VK_NEXT:
-					if ((user_per_page * (current_page + 1)) < ((utype == USERTYPE_C) ? acc_sys->get_user_con_number() : acc_sys->get_user_player_number()))
+					if ((user_per_page * (current_page)) < ((utype == USERTYPE_C) ? acc_sys->get_user_con_number() : acc_sys->get_user_player_number()))
 						current_page++;
 					if (utype == USERTYPE_C)
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
 					}
 					else
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
 					}
@@ -2229,44 +2093,44 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							p_vec.clear();
 							std::copy(pb, pe, std::back_inserter(p_vec));
 						}
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						switch (s_sel)
 						{
 						case SORTS_NAME:
 							if (utype == USERTYPE_C)
 							{
-								std::sort(c_vec.begin(), c_vec.end(), [](const Contributor & a, const Contributor & b) {return a.get_user_name() < b.get_user_name(); });
+								std::sort(c_vec.begin(), c_vec.end(), [](const Contributor &a, const Contributor &b) { return a.get_user_name() < b.get_user_name(); });
 								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							else
 							{
-								std::sort(p_vec.begin(), p_vec.end(), [](const Player & a, const Player & b) {return a.get_user_name() < b.get_user_name(); });
+								std::sort(p_vec.begin(), p_vec.end(), [](const Player &a, const Player &b) { return a.get_user_name() < b.get_user_name(); });
 								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							break;
 						case SORTS_LEVEL:
 							if (utype == USERTYPE_C)
 							{
-								std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor & a, const Contributor & b) {return a.get_level() < b.get_level(); });
+								std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor &a, const Contributor &b) { return a.get_level() < b.get_level(); });
 								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							else
 							{
-								std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player & a, const Player & b) {return a.get_level() < b.get_level(); });
+								std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_level() < b.get_level(); });
 								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							break;
 						case SORTS_EXP:
-							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player & a, const Player & b) {return a.get_exp() < b.get_exp(); });
+							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_exp() < b.get_exp(); });
 							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case SORTS_PASS:
-							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player & a, const Player & b) {return a.get_level_passed() < b.get_level_passed(); });
+							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_level_passed() < b.get_level_passed(); });
 							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case SORTS_CON:
-							std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor & a, const Contributor & b) {return a.get_word_contributed() < b.get_word_contributed(); });
+							std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor &a, const Contributor &b) { return a.get_word_contributed() < b.get_word_contributed(); });
 							DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						default:
@@ -2288,7 +2152,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							p_vec.clear();
 							std::copy(pb, pe, std::back_inserter(p_vec));
 						}
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first , OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
 						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
 						switch (f_pack.type)
 						{
@@ -2296,13 +2160,13 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							if (utype == USERTYPE_C)
 							{
 								temp_c_vec.clear();
-								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_user_name() == f_pack.name) temp_c_vec.push_back(a); });
+								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_user_name() == f_pack.name) temp_c_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							else
 							{
 								temp_p_vec.clear();
-								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_user_name() == f_pack.name) temp_p_vec.push_back(a); });
+								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_user_name() == f_pack.name) temp_p_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							break;
@@ -2310,32 +2174,33 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 							if (utype == USERTYPE_C)
 							{
 								temp_c_vec.clear();
-								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_level() == f_pack.integer) temp_c_vec.push_back(a); });
+								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_level() == f_pack.integer) temp_c_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							else
 							{
 								temp_p_vec.clear();
-								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_level() == f_pack.integer) temp_p_vec.push_back(a); });
+								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_level() == f_pack.integer) temp_p_vec.push_back(a); });
 								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							}
 							break;
 						case FilterPack::FPT_CON:
 							temp_c_vec.clear();
-							std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor & a) { if (a.get_word_contributed() == f_pack.integer) temp_c_vec.push_back(a); });
+							std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_word_contributed() == f_pack.integer) temp_c_vec.push_back(a); });
 							DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case FilterPack::FPT_PASS:
 							temp_p_vec.clear();
-							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (a.get_level_passed() == f_pack.integer) temp_p_vec.push_back(a); });
+							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_level_passed() == f_pack.integer) temp_p_vec.push_back(a); });
 							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
 						case FilterPack::FPT_EXP:
 							temp_p_vec.clear();
-							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player & a) { if (static_cast<int>(a.get_exp()) == static_cast<int>(f_pack.exp)) temp_p_vec.push_back(a); });
+							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (static_cast<int>(a.get_exp()) == static_cast<int>(f_pack.exp)) temp_p_vec.push_back(a); });
 							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
 							break;
-						default:break;
+						default:
+							break;
 						}
 						break;
 					case BACK:
@@ -2357,7 +2222,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage & next_page)
 	return ERROR_SUCCESS;
 }
 
-DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
+DWORD ConsoleIO::to_contributor_play_page(NextPage &next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -2402,22 +2267,21 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 	SHORT dy = (srW.Bottom - 1) - y;
 
 	const char *OptionStr[INFO + 1] =
-	{
-		"Enter your words",
-		"Your word",
-		"Submit",
-		"Back to menu",
-		""
-	};
+		{
+			"Enter your words",
+			"Your word",
+			"Submit",
+			"Back to menu",
+			""};
 
 	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[INFO + 1] =
-	{
-		{x + dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, y + dy / 4},			// HEADER
-		{x + dx / 3, y + dy * 2 / 4},			// INPUT
-		{x + dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 3 / 4},			// CON
-		{x + dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, y + dy * 3 / 4},	// BACK
-		{x + dx / 2, y + dy - 2}	// INFO
-	};
+		{
+			{x + dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, y + dy / 4},		 // HEADER
+			{x + dx / 3, y + dy * 2 / 4},															 // INPUT
+			{x + dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 3 / 4},		 // CON
+			{x + dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, y + dy * 3 / 4}, // BACK
+			{x + dx / 2, y + dy - 2}																 // INFO
+		};
 
 	for (SHORT row = 0; row < srW.Bottom; row++)
 		for (SHORT col = 0; col < srW.Right; col++)
@@ -2436,18 +2300,16 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 		for (SHORT col = 0; col < srW.Right; col++)
 		{
 			if (col == OptionPos[HEADER].first && row == OptionPos[HEADER].second)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[HEADER], std::strlen(OptionStr[HEADER]), {col , row}, &written);
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[HEADER], std::strlen(OptionStr[HEADER]), {col, row}, &written);
 			else if (col == OptionPos[INPUT].first && row == OptionPos[INPUT].second)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[INPUT], std::strlen(OptionStr[INPUT]), {col - static_cast<SHORT>(std::strlen(OptionStr[INPUT])) , row}, &written);
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[INPUT], std::strlen(OptionStr[INPUT]), {col - static_cast<SHORT>(std::strlen(OptionStr[INPUT])), row}, &written);
 			else if (col == OptionPos[CON].first && row == OptionPos[CON].second)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[CON], std::strlen(OptionStr[CON]), {col , row}, &written);
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[CON], std::strlen(OptionStr[CON]), {col, row}, &written);
 			else if (col == OptionPos[BACK].first && row == OptionPos[BACK].second)
-				WriteConsoleOutputCharacter(hStdOut, OptionStr[BACK], std::strlen(OptionStr[BACK]), {col , row}, &written);
-
+				WriteConsoleOutputCharacter(hStdOut, OptionStr[BACK], std::strlen(OptionStr[BACK]), {col, row}, &written);
 		}
 
 	UserType utype = USERTYPE_C;
-
 
 	bool is_break = false;
 	CPlayPos cpos = BACK;
@@ -2534,6 +2396,7 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 					if (cpos == BACK)
 					{
 						WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
+						Shine(hStdOut, std::strlen(OptionStr[BACK]), {OptionPos[BACK].first, OptionPos[BACK].second});
 						is_break = true;
 						next_page = P_MENU;
 					}
@@ -2546,10 +2409,10 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 							WriteConsoleOutputAttribute(hStdOut, attribute_bwhite, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
 							WriteConsoleOutputCharacter(hStdOut, emp_str.c_str(), static_cast<SHORT>(emp_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(emp_str.size()) / 2, OptionPos[INFO].second}, &written);
 							WriteConsoleOutputAttribute(hStdOut, attribute_fred, static_cast<SHORT>(emp_str.size()), {OptionPos[INFO].first - static_cast<SHORT>(emp_str.size()) / 2, OptionPos[INFO].second}, &written);
-
 						}
 						else if (word_list->AddWord(input_str, name))
 						{
+							Shine(hStdOut, std::strlen(OptionStr[CON]), {OptionPos[CON].first, OptionPos[CON].second});
 							std::string suc_str = "Add your word into word list successfully.";
 							acc_sys->get_ref_contributor(name).inc_word_contributed();
 							WriteConsoleOutputCharacter(hStdOut, space_array, dx - 1, {x + 1, OptionPos[INFO].second}, &written);
@@ -2573,7 +2436,8 @@ DWORD ConsoleIO::to_contributor_play_page(NextPage & next_page)
 						SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1 + static_cast<SHORT>(input_str.size()), OptionPos[INPUT].second});
 					}
 					break;
-				default:break;
+				default:
+					break;
 				}
 			}
 		}
@@ -2594,21 +2458,21 @@ static DWORD ShowGameHelpMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT
 	};
 
 	const char *OptionStr[OK + 1] =
-	{
-		"Type the word you see and prees Enter after countdown",
-		"Yes",
-	};
+		{
+			"Type the word you see and prees Enter after countdown",
+			"Yes",
+		};
 
 	SHORT _x = x + dx / 3,
-		_dx =  dx / 3,
-		_y = y + dy / 3,
-		_dy = dy / 3;
+		  _dx = dx / 3,
+		  _y = y + dy / 3,
+		  _dy = dy / 3;
 
 	std::pair<SHORT, SHORT> OptionPos[OK + 1] =
-	{
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy / 3},		// LINE0
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 2 / 3},	// OK
-	};
+		{
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy / 3},  // LINE0
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 2 / 3}, // OK
+		};
 	/*
 	for (auto row = _y; row <= _y + _dy; row++)
 		for (auto col = _x; col <= _x + _dx; col++)
@@ -2649,7 +2513,7 @@ static DWORD ShowGameHelpMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHORT
 					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[OK])), {OptionPos[OK].first, OptionPos[OK].second}, &written);
 					is_break = true;
 					break;
-				default :
+				default:
 					break;
 				}
 			}
@@ -2673,29 +2537,28 @@ static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 	};
 	std::string xp_str = std::to_string(gain_exp);
 	const char *OptionStr[BACK + 1] =
-	{
-		"Congratulations",
-		"Level passed",
-		"Gain XP",
-		"LV up",
-		"Next level",
-		"Back to menu"
-	};
+		{
+			"Congratulations",
+			"Level passed",
+			"Gain XP",
+			"LV up",
+			"Next level",
+			"Back to menu"};
 
 	SHORT _x = x + dx / 5,
-		_dx = dx * 3 / 5,
-		_y = y + dy / 5,
-		_dy = dy * 3 / 5;
+		  _dx = dx * 3 / 5,
+		  _y = y + dy / 5,
+		  _dy = dy * 3 / 5;
 
 	std::pair<SHORT, SHORT> OptionPos[BACK + 1] =
-	{
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 5},		// HEADER
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 5},	// LINE1
-		{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[EXP])), _y + _dy * 3 / 5},			// EXP
-		{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[LV])) / 2, _y + _dy * 3 / 5},	// LV
-		{_x + _dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 4 / 5},		// OK
-		{_x + _dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 4 / 5}	// BACK
-	};
+		{
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 5},		// HEADER
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 5},   // LINE1
+			{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[EXP])), _y + _dy * 3 / 5},			// EXP
+			{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[LV])) / 2, _y + _dy * 3 / 5},  // LV
+			{_x + _dx / 3 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 4 / 5},		// OK
+			{_x + _dx * 2 / 3 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 4 / 5} // BACK
+		};
 
 	for (auto row = _y; row <= _y + _dy; row++)
 		for (auto col = _x; col <= _x + _dx; col++)
@@ -2744,7 +2607,8 @@ static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 						is_back = false;
 					is_break = true;
 					break;
-				case VK_LEFT:case VK_RIGHT:
+				case VK_LEFT:
+				case VK_RIGHT:
 					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
 					lppos = (lppos == BACK) ? OK : BACK;
 					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
@@ -2771,25 +2635,24 @@ static DWORD ShowLevelFailMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 	};
 
 	const char *OptionStr[BACK + 1] =
-	{
-		"Opps",
-		"You failed",
-		"Try again",
-		"Back to menu"
-	};
+		{
+			"Opps",
+			"You failed",
+			"Try again",
+			"Back to menu"};
 
 	SHORT _x = x + dx / 4,
-		_dx = dx / 2,
-		_y = y + dy / 4,
-		_dy = dy / 2;
+		  _dx = dx / 2,
+		  _y = y + dy / 4,
+		  _dy = dy / 2;
 
 	std::pair<SHORT, SHORT> OptionPos[BACK + 1] =
-	{
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 4},		// HEADER
-		{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 4},	// LINE1
-		{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 3 / 4},		// OK
-		{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 3 / 4}	// BACK
-	};
+		{
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[HEADER])) / 2, _y + _dy / 4},		// HEADER
+			{_x + _dx / 2 - static_cast<SHORT>(std::strlen(OptionStr[LINE0])) / 2, _y + _dy * 2 / 4},   // LINE1
+			{_x + _dx / 4 - static_cast<SHORT>(std::strlen(OptionStr[OK])) / 2, _y + _dy * 3 / 4},		// OK
+			{_x + _dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, _y + _dy * 3 / 4} // BACK
+		};
 
 	for (auto row = _y; row <= _y + _dy; row++)
 		for (auto col = _x; col <= _x + _dx; col++)
@@ -2835,7 +2698,8 @@ static DWORD ShowLevelFailMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 						is_back = false;
 					is_break = true;
 					break;
-				case VK_LEFT:case VK_RIGHT:
+				case VK_LEFT:
+				case VK_RIGHT:
 					WriteConsoleOutputAttribute(hOut, attribute_bwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
 					lfpos = (lfpos == BACK) ? OK : BACK;
 					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lfpos])), {OptionPos[lfpos].first, OptionPos[lfpos].second}, &written);
@@ -2893,7 +2757,7 @@ static void RidKeyInput(HANDLE hIn)
 	ReadConsoleInput(hIn, irKb, 100, &wNumber);
 }
 
-DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
+DWORD ConsoleIO::to_player_play_page(NextPage &next_page)
 {
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -2936,29 +2800,29 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 	SHORT dy = (srW.Bottom - 1) - y;
 
 	const char *OptionStr[INPUT + 1] =
-	{
-		"Time",
-		"Level",
-		"Word"
-	};
+		{
+			"Time",
+			"Level",
+			"Word"};
 
-	std::pair<SHORT, SHORT > OptionPos[INPUT + 1] =
-	{
-		{x + dx / 3, y + 2},
-		{x + dx * 2 / 3, y + 2},
-		{x + dx * 2 / 7, y + dy - 3 },
-	};
+	std::pair<SHORT, SHORT> OptionPos[INPUT + 1] =
+		{
+			{x + dx / 3, y + 2},
+			{x + dx * 2 / 3, y + 2},
+			{x + dx * 2 / 7, y + dy - 3},
+		};
 
 	DrawGameFrame(hStdOut, srW, x, y, dx, dy);
 
 	for (int i = TIME; i <= INPUT; i++)
 		WriteConsoleOutputCharacter(hStdOut, OptionStr[i], static_cast<SHORT>(std::strlen(OptionStr[i])), {OptionPos[i].first - static_cast<SHORT>(std::strlen(OptionStr[i])), OptionPos[i].second}, &written);
-	
+	for (SHORT col = x + 1; col < x + dx; col++)
+		WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, OptionPos[TIME].second + 1}, &written);
 	ShowGameHelpMsgBox(hStdOut, hStdIn, x, y, dx, dy);
 
-	CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
-	// 
-	acc_sys->set_current_user();
+	CleanGameBoard(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1);
+	//
+	// acc_sys->set_current_user();
 	//
 	bool is_back = false;
 	INPUT_RECORD irKb[12];
@@ -2968,7 +2832,7 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 	std::string name = acc_sys->get_current_user_str();
 	Player &player = acc_sys->get_ref_player(name);
 	int current_level = player.get_level_passed() + 1;
-	current_level = 70;
+	// current_level = 50;
 
 	while (!is_back)
 	{
@@ -2985,15 +2849,15 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 			std::string game_word_str = game_word.word;
 			cntdn_str = std::to_string(countdown);
 			input_str.clear();
-			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1);
 			WriteConsoleOutputCharacter(hStdOut, space_array, static_cast<SHORT>(level_str.size()), {OptionPos[LEVEL].first + 1, OptionPos[LEVEL].second}, &written);
 			WriteConsoleOutputCharacter(hStdOut, level_str.c_str(), static_cast<SHORT>(level_str.size()), {OptionPos[LEVEL].first + 1, OptionPos[LEVEL].second}, &written);
 			WriteConsoleOutputCharacter(hStdOut, space_array, 6, {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
 			WriteConsoleOutputCharacter(hStdOut, cntdn_str.c_str(), static_cast<SHORT>(cntdn_str.size()), {OptionPos[TIME].first + 1, OptionPos[TIME].second}, &written);
 
-			ShowGameWord(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second, game_word_str);
+			ShowGameWord(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1, game_word_str);
 
-			for (int i = countdown; i > 0; )
+			for (int i = countdown; i > 0;)
 			{
 				i -= 43;
 				if (i < 0)
@@ -3004,7 +2868,7 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 				Sleep(43);
 			}
 
-			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1);
 			SetConsoleCursorPosition(hStdOut, {OptionPos[INPUT].first + 1, OptionPos[INPUT].second});
 			set_cursor_visible(hStdOut, TRUE);
 
@@ -3071,7 +2935,7 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 		if (is_fail)
 		{
 			ShowLevelFailMsgBox(hStdOut, hStdIn, x, y, dx, dy, is_back);
-			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1);
 		}
 		else
 		{
@@ -3082,7 +2946,7 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 			int lv_after = player.get_level();
 			current_level++;
 			ShowLevelPassMsgBox(hStdOut, hStdIn, x, y, dx, dy, is_back, !(lv_before == lv_after), gain_exp);
-			CleanGameBoard(hStdOut, x, OptionPos[TIME].second, dx, OptionPos[INPUT].second - OptionPos[TIME].second);
+			CleanGameBoard(hStdOut, x, OptionPos[TIME].second + 1, dx, OptionPos[INPUT].second - OptionPos[TIME].second - 1);
 		}
 	}
 	next_page = P_MENU;
@@ -3091,6 +2955,3 @@ DWORD ConsoleIO::to_player_play_page(NextPage & next_page)
 	set_cursor_visible(hStdOut, TRUE);
 	return ERROR_SUCCESS;
 }
-
-
-

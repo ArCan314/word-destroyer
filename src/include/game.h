@@ -7,7 +7,7 @@ inline int get_round(int level)
 		return 1;
 	else if (level < 50)
 		return 2;
-	else if (level < 70)
+	else if (level < 90)
 		return 3;
 	else
 	{
@@ -28,7 +28,7 @@ inline int get_round_time(int level)
 	else
 	{
 		static std::random_device rd;
-		static std::uniform_int_distribution<int> uid(1200, 2300);
+		static std::uniform_int_distribution<int> uid(1500, 2300);
 		return uid(rd);
 	}
 }
