@@ -758,7 +758,6 @@ DWORD ConsoleIO::to_welcome_page()
 			if (irKb[i].EventType == KEY_EVENT && irKb[i].Event.KeyEvent.bKeyDown == TRUE)
 			{
 				KEY_EVENT_RECORD ker = irKb[i].Event.KeyEvent;
-				CONSOLE_CURSOR_INFO cci;
 
 				if (std::isalnum(ker.uChar.AsciiChar))
 				{
@@ -1465,13 +1464,20 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 		PASS,
 		CON
 	};
-
+	SHORT sidex_diff = sidex.second - sidex.first;
 	SHORT x = sidex.first + sidex_diff / 3;
 	SHORT y = srW.Bottom / 3;
 	SHORT dx = sidex_diff / 3;
 	SHORT dy = srW.Bottom / 3;
 
-	SHORT sidex_diff = sidex.second - sidex.first;
+	const char *OptionStr[CON + 1] =
+	{
+		"NAME",
+		"LV",
+		"XP",
+		"PASSED",
+		"WORD"};
+
 	std::pair<SHORT, SHORT> OptionPos[CON + 1] =
 		{
 			{x + dx * 1 / 5 - static_cast<SHORT>(std::strlen(OptionStr[NAME])) / 2, y + dy * 1 / 2},  // NAME
@@ -1481,13 +1487,6 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 			{x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 2},   // CON
 		};
 
-	const char *OptionStr[CON + 1] =
-		{
-			"NAME",
-			"LV",
-			"XP",
-			"PASSED",
-			"WORD"};
 
 	DWORD written;
 
@@ -1765,7 +1764,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 								}
 								catch (const std::exception &e)
 								{
-									;
+									Log::WriteLog(e.what());
 								}
 								break;
 							case FilterPack::FPT_EXP:
@@ -1777,7 +1776,7 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 								}
 								catch (const std::exception &e)
 								{
-									;
+									Log::WriteLog(e.what());
 								}
 								break;
 							default:
@@ -1852,8 +1851,8 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 
 	SHORT x = srW.Right / 8;
 	SHORT y = srW.Top;
-	SHORT sidex_diff = srW.Right * 3 / 4;
-	SHORT sidey_diff = srW.Bottom - y;
+	SHORT dx = srW.Right * 3 / 4;
+	SHORT dy = srW.Bottom - 1 - y;
 	const char *OptionStr[INFO + 1] =
 		{
 			"",
@@ -1929,7 +1928,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 	std::vector<Contributor> c_vec(cb, ce);
 	std::vector<Player> temp_p_vec(pb, pe);
 	std::vector<Contributor> temp_c_vec(cb, ce);
-	DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+	DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 
 	bool is_break = false;
 	UListPos ulpos = BACK;
@@ -2006,15 +2005,15 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 					utype = (utype == USERTYPE_C) ? USERTYPE_P : USERTYPE_C;
 					if (utype == USERTYPE_C)
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 					}
 					else
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 					}
 					break;
 				case VK_PRIOR:
@@ -2023,32 +2022,32 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 						current_page--;
 						if (utype == USERTYPE_C)
 						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-							DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
+							WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+							DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 						}
 						else
 						{
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-							WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-							DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
+							WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+							WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+							DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 						}
 					}
 					break;
 				case VK_NEXT:
-					if ((user_per_page * (current_page)) < ((utype == USERTYPE_C) ? acc_sys->get_user_con_number() : acc_sys->get_user_player_number()))
+					if ((static_cast<long long>(user_per_page) * (current_page)) < ((utype == USERTYPE_C) ? acc_sys->get_user_con_number() : acc_sys->get_user_player_number()))
 						current_page++;
 					if (utype == USERTYPE_C)
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, sidex, srW, current_page);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+						DrawUserList(hStdOut, std::vector<Contributor>(cb, ce), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 					}
 					else
 					{
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
-						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, sidex, srW, current_page);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
+						DrawUserList(hStdOut, std::vector<Player>(pb, pe), OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 					}
 					break;
 				case VK_RETURN:
@@ -2056,7 +2055,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 					{
 					case SORT:
 						Shine(hStdOut, std::strlen(OptionStr[SORT]), {OptionPos[SORT].first, OptionPos[SORT].second});
-						ShowSortMsgBox(hStdOut, hStdIn, sidex, srW, utype, s_sel);
+						ShowSortMsgBox(hStdOut, hStdIn, {x + 1, x + dx - 1}, srW, utype, s_sel);
 						if (utype == USERTYPE_C)
 						{
 							current_page = 1;
@@ -2069,45 +2068,45 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 							p_vec.clear();
 							std::copy(pb, pe, std::back_inserter(p_vec));
 						}
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
 						switch (s_sel)
 						{
 						case SORTS_NAME:
 							if (utype == USERTYPE_C)
 							{
 								std::sort(c_vec.begin(), c_vec.end(), [](const Contributor &a, const Contributor &b) { return a.get_user_name() < b.get_user_name(); });
-								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							else
 							{
 								std::sort(p_vec.begin(), p_vec.end(), [](const Player &a, const Player &b) { return a.get_user_name() < b.get_user_name(); });
-								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							break;
 						case SORTS_LEVEL:
 							if (utype == USERTYPE_C)
 							{
 								std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor &a, const Contributor &b) { return a.get_level() < b.get_level(); });
-								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							else
 							{
 								std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_level() < b.get_level(); });
-								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							break;
 						case SORTS_EXP:
 							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_exp() < b.get_exp(); });
-							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						case SORTS_PASS:
 							std::sort(p_vec.rbegin(), p_vec.rend(), [](const Player &a, const Player &b) { return a.get_level_passed() < b.get_level_passed(); });
-							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						case SORTS_CON:
 							std::sort(c_vec.rbegin(), c_vec.rend(), [](const Contributor &a, const Contributor &b) { return a.get_word_contributed() < b.get_word_contributed(); });
-							DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						default:
 							break;
@@ -2115,7 +2114,7 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 						break;
 					case FILTER:
 						Shine(hStdOut, std::strlen(OptionStr[FILTER]), {OptionPos[FILTER].first, OptionPos[FILTER].second});
-						ShowFilterMsgBox(hStdOut, hStdIn, sidex, srW, utype, f_pack);
+						ShowFilterMsgBox(hStdOut, hStdIn, {x + 1, x + dx - 1}, srW, utype, f_pack);
 						if (utype == USERTYPE_C)
 						{
 							current_page = 1;
@@ -2128,8 +2127,8 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 							p_vec.clear();
 							std::copy(pb, pe, std::back_inserter(p_vec));
 						}
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff, {sidex.first, OptionPos[HEADER].second}, &written);
-						WriteConsoleOutputCharacter(hStdOut, space_array, sidex_diff / 2, {sidex.first + sidex_diff / 2, OptionPos[LEVEL].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2), {x + 1, OptionPos[HEADER].second}, &written);
+						WriteConsoleOutputCharacter(hStdOut, space_array, (dx - 2) / 2, {x + 1 + (dx - 2) / 2, OptionPos[LEVEL].second}, &written);
 						switch (f_pack.type)
 						{
 						case FilterPack::FPT_NAME:
@@ -2137,13 +2136,13 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 							{
 								temp_c_vec.clear();
 								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_user_name() == f_pack.name) temp_c_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							else
 							{
 								temp_p_vec.clear();
 								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_user_name() == f_pack.name) temp_p_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							break;
 						case FilterPack::FPT_LV:
@@ -2151,29 +2150,29 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 							{
 								temp_c_vec.clear();
 								std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_level() == f_pack.integer) temp_c_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							else
 							{
 								temp_p_vec.clear();
 								std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_level() == f_pack.integer) temp_p_vec.push_back(a); });
-								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+								DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							}
 							break;
 						case FilterPack::FPT_CON:
 							temp_c_vec.clear();
 							std::for_each(c_vec.begin(), c_vec.end(), [&](const Contributor &a) { if (a.get_word_contributed() == f_pack.integer) temp_c_vec.push_back(a); });
-							DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, temp_c_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						case FilterPack::FPT_PASS:
 							temp_p_vec.clear();
 							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (a.get_level_passed() == f_pack.integer) temp_p_vec.push_back(a); });
-							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						case FilterPack::FPT_EXP:
 							temp_p_vec.clear();
 							std::for_each(p_vec.begin(), p_vec.end(), [&](const Player &a) { if (static_cast<int>(a.get_exp()) == static_cast<int>(f_pack.exp)) temp_p_vec.push_back(a); });
-							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, sidex, srW, current_page);
+							DrawUserList(hStdOut, temp_p_vec, OptionStr, OptionPos, {x + 1, x + dx - 1}, srW, current_page);
 							break;
 						default:
 							break;
@@ -2589,7 +2588,7 @@ static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 					lppos = (lppos == BACK) ? OK : BACK;
 					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
 					break;
-				default:z
+				default:
 					break;
 				}
 			}
@@ -2916,7 +2915,7 @@ DWORD ConsoleIO::to_player_play_page(NextPage &next_page)
 		else
 		{
 			int lv_before = player.get_level();
-			int gain_exp = get_gain_exp(current_level, time_cost, total_difficulty);
+			double gain_exp = get_gain_exp(current_level, time_cost, total_difficulty);
 			player.raise_exp_(gain_exp);
 			player.inc_level_passed();
 			int lv_after = player.get_level();

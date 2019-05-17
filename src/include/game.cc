@@ -3,7 +3,7 @@
 
 static constexpr int max_lv = 200;
 static constexpr int max_stage = 120;
-static long long player_exp_table[max_lv];
+static double player_exp_table[max_lv];
 static long long contributor_level_table[max_lv];
 static bool is_init = false;
 

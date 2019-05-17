@@ -49,10 +49,10 @@ bool User::Save(std::ofstream &ofs) const
     temp.name = new char[temp.name_len];
     temp.pswd = new char[temp.pswd_len];
 
-    for (std::size_t i = 0; i < name_.size(); i++)
+    for (std::size_t i = 0; i < temp.name_len; i++)
         temp.name[i] = name_[i];
 
-    for (std::size_t i = 0; i < pswd_.size(); i++)
+    for (std::size_t i = 0; i < temp.pswd_len; i++)
         temp.pswd[i] = pswd_[i];
 
     EncryptPswd(temp);

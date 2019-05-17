@@ -183,7 +183,7 @@ int WordList::get_difficulty(const std::string &word)
 		}
 	}
 
-	double difficulty = len + change_time * 0.5 + (upper - lower) * 0.3;
+	double difficulty = len + change_time * 0.5 + (static_cast<long long>(upper) - lower) * 0.3;
 
     return difficulty;
 }

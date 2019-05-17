@@ -45,7 +45,7 @@ int main()
 {
 	AccountSys acc_sys;
 	WordList word_list;
-	DWORD dwErrCode;
+	// DWORD dwErrCode;
 	/*
 	std::ifstream ifs("../aaa.txt");
 	std::ofstream ofs("../oops.txt");
