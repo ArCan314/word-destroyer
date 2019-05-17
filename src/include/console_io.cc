@@ -1459,51 +1459,35 @@ static DWORD ShowSortMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SHOR
 {
 	enum SortMsgBox
 	{
-		LU = 0,
-		RU,
-		LD,
-		RD,
 		NAME,
 		LEVEL,
 		EXP,
 		PASS,
 		CON
 	};
+
+	SHORT x = sidex.first + sidex_diff / 3;
+	SHORT y = srW.Bottom / 3;
+	SHORT dx = sidex_diff / 3;
+	SHORT dy = srW.Bottom / 3;
+
 	SHORT sidex_diff = sidex.second - sidex.first;
 	std::pair<SHORT, SHORT> OptionPos[CON + 1] =
 		{
-			{sidex.first + sidex_diff / 3, srW.Bottom / 3},			// LU
-			{sidex.first + sidex_diff * 2 / 3, srW.Bottom / 3},		// RU
-			{sidex.first + sidex_diff / 3, srW.Bottom * 2 / 3},		// LD
-			{sidex.first + sidex_diff * 2 / 3, srW.Bottom * 2 / 3}, // RD
-			{0, 0},													// NAME
-			{0, 0},													// LEVEL
-			{0, 0},													// EXP
-			{0, 0},													// PASS
-			{0, 0},													// CON
+			{x + dx * 1 / 5 - static_cast<SHORT>(std::strlen(OptionStr[NAME])) / 2, y + dy * 1 / 2},  // NAME
+			{x + dx * 2 / 5 - static_cast<SHORT>(std::strlen(OptionStr[LEVEL])) / 2, y + dy * 1 / 2}, // LEVEL
+			{x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 2},   // EXP
+			{x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 2},  // PASS
+			{x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 2},   // CON
 		};
 
 	const char *OptionStr[CON + 1] =
 		{
-			"",
-			"",
-			"",
-			"",
 			"NAME",
 			"LV",
 			"XP",
 			"PASSED",
 			"WORD"};
-
-	SHORT x = OptionPos[LU].first;
-	SHORT y = OptionPos[LU].second;
-	SHORT dx = OptionPos[RU].first - OptionPos[LU].first;
-	SHORT dy = OptionPos[LD].second - OptionPos[LU].second;
-	OptionPos[NAME] = {x + dx * 1 / 5 - static_cast<SHORT>(std::strlen(OptionStr[NAME])) / 2, y + dy * 1 / 2};
-	OptionPos[LEVEL] = {x + dx * 2 / 5 - static_cast<SHORT>(std::strlen(OptionStr[LEVEL])) / 2, y + dy * 1 / 2};
-	OptionPos[EXP] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 2};
-	OptionPos[PASS] = {x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 2};
-	OptionPos[CON] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 2};
 
 	DWORD written;
 
@@ -1617,19 +1601,10 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 		INBOX
 	};
 	SHORT sidex_diff = sidex.second - sidex.first;
-	std::pair<SHORT, SHORT> OptionPos[INBOX + 1] =
-		{
-			{sidex.first + sidex_diff / 4, srW.Bottom / 3},			// LU
-			{sidex.first + sidex_diff * 3 / 4, srW.Bottom / 3},		// RU
-			{sidex.first + sidex_diff / 4, srW.Bottom * 2 / 3},		// LD
-			{sidex.first + sidex_diff * 3 / 4, srW.Bottom * 2 / 3}, // RD
-			{0, 0},													// NAME
-			{0, 0},													// LEVEL
-			{0, 0},													// EXP
-			{0, 0},													// PASS
-			{0, 0},													// CON
-			{0, 0},													// INBOX
-		};
+	SHORT x = sidex.first + sidex_diff / 4;
+	SHORT y = srW.Bottom / 3;
+	SHORT dx = sidex_diff / 2;
+	SHORT dy = srW.Bottom / 3;
 
 	const char *OptionStr[INBOX + 1] =
 		{
@@ -1643,17 +1618,19 @@ static DWORD ShowFilterMsgBox(HANDLE hOut, HANDLE hIn, const std::pair<SHORT, SH
 			"PASSED",
 			"WORD",
 			"Value"};
-
-	SHORT x = OptionPos[LU].first;
-	SHORT y = OptionPos[LU].second;
-	SHORT dx = OptionPos[RU].first - OptionPos[LU].first;
-	SHORT dy = OptionPos[LD].second - OptionPos[LU].second;
-	OptionPos[NAME] = {x + dx * 1 / 5 - static_cast<SHORT>(std::strlen(OptionStr[NAME])) / 2, y + dy * 1 / 3};
-	OptionPos[LEVEL] = {x + dx * 2 / 5 - static_cast<SHORT>(std::strlen(OptionStr[LEVEL])) / 2, y + dy * 1 / 3};
-	OptionPos[EXP] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 3};
-	OptionPos[PASS] = {x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 3};
-	OptionPos[CON] = {x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 3};
-	OptionPos[INBOX] = {x + dx * 1 / 5, y + dy * 3 / 4};
+	std::pair<SHORT, SHORT> OptionPos[INBOX + 1] =
+		{
+			{sidex.first + sidex_diff / 4, srW.Bottom / 3},											  // LU
+			{sidex.first + sidex_diff * 3 / 4, srW.Bottom / 3},										  // RU
+			{sidex.first + sidex_diff / 4, srW.Bottom * 2 / 3},										  // LD
+			{sidex.first + sidex_diff * 3 / 4, srW.Bottom * 2 / 3},									  // RD
+			{x + dx * 1 / 5 - static_cast<SHORT>(std::strlen(OptionStr[NAME])) / 2, y + dy * 1 / 3},  // NAME
+			{x + dx * 2 / 5 - static_cast<SHORT>(std::strlen(OptionStr[LEVEL])) / 2, y + dy * 1 / 3}, // LEVEL
+			{x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[EXP])) / 2, y + dy * 1 / 3},   // EXP
+			{x + dx * 4 / 5 - static_cast<SHORT>(std::strlen(OptionStr[PASS])) / 2, y + dy * 1 / 3},  // PASS
+			{x + dx * 3 / 5 - static_cast<SHORT>(std::strlen(OptionStr[CON])) / 2, y + dy * 1 / 3},   // CON
+			{x + dx * 1 / 5, y + dy * 3 / 4},														  // INBOX
+		};
 
 	DWORD written;
 
@@ -1873,11 +1850,10 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 	DWORD written;
 	SMALL_RECT srW = csbi.srWindow;
 
-	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> sidex = {srW.Right / 8 + 1, srW.Right * 7 / 8 - 1};
-	std::pair<SHORT /*L-Side*/, SHORT /*R-Side*/> sidey = {srW.Top + 1, srW.Bottom - 1};
-
-	SHORT sidex_diff = sidex.second - sidex.first;
-	SHORT sidey_diff = sidey.second - sidey.first;
+	SHORT x = srW.Right / 8;
+	SHORT y = srW.Top;
+	SHORT sidex_diff = srW.Right * 3 / 4;
+	SHORT sidey_diff = srW.Bottom - y;
 	const char *OptionStr[INFO + 1] =
 		{
 			"",
@@ -1893,26 +1869,26 @@ DWORD ConsoleIO::to_user_list_page(NextPage &next_page)
 
 	std::pair<SHORT /*X*/, SHORT /*Y*/> OptionPos[] =
 		{
-			{sidex.first + sidex_diff * 1 / 2, sidey.first + 1},														   // HEADER
-			{sidex.first + sidex_diff * 1 / 7, sidey.first + 3},														   // NAME
-			{sidex.first + sidex_diff * 1 / 3, sidey.first + 3},														   // LEVEL
-			{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},														   // EXP
-			{sidex.first + sidex_diff * 4 / 5, sidey.first + 3},														   // LP
-			{sidex.first + sidex_diff * 3 / 5, sidey.first + 3},														   // CON
-			{sidex.first + sidex_diff * 1 / 4 - static_cast<SHORT>(std::strlen(OptionStr[SORT])) / 2, sidey.second - 4},   // SORT
-			{sidex.first + sidex_diff * 2 / 4 - static_cast<SHORT>(std::strlen(OptionStr[FILTER])) / 2, sidey.second - 4}, // FILTER
-			{sidex.first + sidex_diff * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, sidey.second - 4},   // BACK
-			{sidex.first + sidex_diff * 1 / 2, sidey.second - 2},														   // INFO
+			{x + dx * 1 / 2, y + 1},															   // HEADER
+			{x + dx * 1 / 7, y + 3},															   // NAME
+			{x + dx * 1 / 3, y + 3},															   // LEVEL
+			{x + dx * 3 / 5, y + 3},															   // EXP
+			{x + dx * 4 / 5, y + 3},															   // LP
+			{x + dx * 3 / 5, y + 3},															   // CON
+			{x + dx * 1 / 4 - static_cast<SHORT>(std::strlen(OptionStr[SORT])) / 2, y + dy - 4},   // SORT
+			{x + dx * 2 / 4 - static_cast<SHORT>(std::strlen(OptionStr[FILTER])) / 2, y + dy - 4}, // FILTER
+			{x + dx * 3 / 4 - static_cast<SHORT>(std::strlen(OptionStr[BACK])) / 2, y + dy - 4},   // BACK
+			{x + dx * 1 / 2, y + dy - 2},														   // INFO
 		};
 
 	for (SHORT row = 0; row < srW.Bottom; row++)
 		for (SHORT col = 0; col < srW.Right; col++)
 		{
-			if (col < srW.Right / 8 || col > srW.Right * 7 / 8)
+			if (col < x || col > x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "%", 1, {col, row}, &written);
-			else if (col == srW.Right / 8 || col == srW.Right * 7 / 8)
+			else if (col == x || col == x + dx)
 				WriteConsoleOutputCharacter(hStdOut, "#", 1, {col, row}, &written);
-			else if (row == 0 || row == srW.Bottom - 1)
+			else if (row == y || row == y + dy)
 				WriteConsoleOutputCharacter(hStdOut, "$", 1, {col, row}, &written);
 
 			if (col == OptionPos[NAME].first && row == OptionPos[NAME].second)
@@ -2613,7 +2589,7 @@ static DWORD ShowLevelPassMsgBox(HANDLE hOut, HANDLE hIn, SHORT x, SHORT y, SHOR
 					lppos = (lppos == BACK) ? OK : BACK;
 					WriteConsoleOutputAttribute(hOut, attribute_fwhite, static_cast<SHORT>(std::strlen(OptionStr[lppos])), {OptionPos[lppos].first, OptionPos[lppos].second}, &written);
 					break;
-				default:
+				default:z
 					break;
 				}
 			}
