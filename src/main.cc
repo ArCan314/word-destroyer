@@ -47,6 +47,15 @@ int main()
 	WordList word_list;
 	// DWORD dwErrCode;
 	/*
+	auto t = [](const std::string &s) {
+	std::string temp;
+	for (auto c : s)
+		if (c >= -1 && c <= 255)
+			if (std::isalpha(c))
+				temp.push_back(c);
+	return temp;
+	};
+
 	std::ifstream ifs("../aaa.txt");
 	std::ofstream ofs("../oops.txt");
 	int count = 0;

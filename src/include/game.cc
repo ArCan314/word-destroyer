@@ -1,8 +1,8 @@
 #include "game.h"
 #include "user.h"
 
-static constexpr int max_lv = 200;
-static constexpr int max_stage = 120;
+static constexpr int max_lv = 400;
+static constexpr int max_stage = 300;
 static double player_exp_table[max_lv];
 static long long contributor_level_table[max_lv];
 static bool is_init = false;
@@ -17,7 +17,7 @@ static void init_level_table()
 		if (i < 20)
 			player_exp_table[i] = player_exp_table[i - 1] + 20ll * i;
 		else
-			player_exp_table[i] = player_exp_table[i - 1] * 1.08;
+			player_exp_table[i] = player_exp_table[i - 1] * 1.101;
 		if (i < 10)
 			contributor_level_table[i] = contributor_level_table[i - 1] + 2;
 		else

@@ -42,7 +42,7 @@ const Word &WordList::get_word(int level)
     static std::random_device r;
 	int min_diff = 0;
 	int max_diff = diff_vec_.size() - 1;
-	int diff = level / 6;
+	int diff = level / 10;
 	int diff_lb = diff - 5;
 	int diff_ub = diff + 2;
 	int lb, ub;
@@ -183,7 +183,7 @@ int WordList::get_difficulty(const std::string &word)
 		}
 	}
 
-	double difficulty = len + change_time * 0.5 + (static_cast<long long>(upper) - lower) * 0.3;
+	double difficulty = len * 1.1 + change_time * 0.3 + (static_cast<long long>(upper) - lower) * 0.5;
 
     return difficulty;
 }
