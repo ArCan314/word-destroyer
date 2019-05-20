@@ -1,3 +1,6 @@
+#define CLIENT
+
+#ifdef CLIENT
 #include "Windows.h"
 
 #include <cstdlib>
@@ -10,6 +13,8 @@
 
 #include "include/account_sys.h"
 #include "include/contributor.h"
+
+
 #include "include/log.h"
 #include "include/player.h"
 #include "include/contributor.h"
@@ -95,3 +100,8 @@ int main()
 	Log::CloseLog();
 	return 0;
 }
+#else	// SERVER
+
+
+
+#endif
