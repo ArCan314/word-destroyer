@@ -21,7 +21,7 @@ void InitConsole()
 	std::system("chcp 65001");
 	ConsoleIO::InitAttr();
 	ConsoleIO::set_console_font(20);
-	ConsoleIO::set_console_window_size(110, 30);
+	ConsoleIO::set_console_window_size(130, 35);
 	ConsoleIO::set_console_background( BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED);
 	ConsoleIO::disable_scrollbar();
 	ConsoleIO::set_window_fixed();
