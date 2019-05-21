@@ -26,7 +26,7 @@ public:
         : User(name, pswd, utype), exp_(double(0)), level_passed_(int(0)) {}
 
 	void from_contributor(const Contributor &con);
-	void raise_exp_(double increasement) { exp_ += increasement; inc_level(); }
+	void raise_exp(double increasement) { exp_ += increasement; inc_level(); }
     void inc_level_passed() { level_passed_++; }
 
     double get_exp() const { return exp_; }

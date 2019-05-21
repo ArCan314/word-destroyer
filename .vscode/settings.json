@@ -53,6 +53,11 @@
         "ratio": "cpp",
         "sstream": "cpp",
         "iterator": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "atomic": "cpp",
+        "condition_variable": "cpp",
+        "deque": "cpp",
+        "mutex": "cpp",
+        "thread": "cpp"
     },
 }
