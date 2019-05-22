@@ -3,18 +3,18 @@
 #include <utility>
 
 #include "my_packet.h"
-#include "account_sys.h"
-#include "word_list.h"
 #include "crc32.h"
 #include "user.h"
 #include "player.h"
 #include "contributor.h"
+#include "word_list.h"
 
 void Preparer::Clear()
 {
     kind = 0;
     uid = 0;
     name_len = 0;
+	pswd_len = 0;
     name.clear();
     pswd.clear();
     word.clear();
@@ -47,6 +47,7 @@ void Preparer::Clear()
 // 负责处理 len 及 data, from 由 controller保存
 void Preparer::Decode(const MyPacket &my_packet)
 {
+    Clear();
     int ptr = 0;
     kind = my_packet.data[ptr++];
 
@@ -168,10 +169,10 @@ void Preparer::Decode(const MyPacket &my_packet)
 
         filter_type = FT_NAME;
 
+        user_type = my_packet.data[ptr++];
+
         user_per_page = *(unsigned short *)(my_packet.data + ptr);
         ptr += sizeof(user_per_page);
-
-        user_type = my_packet.data[ptr++];
 
         name_len = my_packet.data[ptr++];
 
@@ -274,8 +275,10 @@ void Preparer::Decode(const MyPacket &my_packet)
     case LOG_OUT_ACK:
         break;
     case LOG_IN_FAIL:
+		is_log_in = 0;
         break;
     case SIGN_UP_FAIL:
+		is_sign_up = 0;
         break;
     default:
         break;
@@ -288,11 +291,13 @@ void Preparer::Decode(const MyPacket &my_packet)
 MyPacket Preparer::Encode()
 {
     int len = 0;
-    static char buffer[2048];
+    char buffer[2048];
     MyPacket res;
     unsigned short *s_buffer;
     unsigned *u_buffer;
     double *d_buffer;
+
+    CopyToCSTR(kind, buffer, len);
 
     switch (kind)
     {
@@ -339,7 +344,7 @@ MyPacket Preparer::Encode()
         CopyToCSTR(pswd, buffer, len);
         break;
     case SIGN_UP_R:
-        CopyToCSTR(is_log_in, buffer, len);
+        CopyToCSTR(is_sign_up, buffer, len);
 
         CopyToCSTR(uid, buffer, len);
         break;
@@ -497,6 +502,7 @@ MyPacket Preparer::Encode()
     res.len = len;
     res.data = new char[len];
     std::memcpy(res.data, buffer, len);
+    return res;
 }
 
 void Preparer::CopyToCSTR(const unsigned char c, char *buffer, int &ptr)
@@ -506,19 +512,19 @@ void Preparer::CopyToCSTR(const unsigned char c, char *buffer, int &ptr)
 
 void Preparer::CopyToCSTR(const unsigned short s, char *buffer, int &ptr)
 {
-    static unsigned short *ps = reinterpret_cast<unsigned short *>(buffer + ptr);
+    unsigned short *ps = reinterpret_cast<unsigned short *>(buffer + ptr);
     *ps = s;
     ptr += sizeof(s);
 }
 void Preparer::CopyToCSTR(const unsigned u, char *buffer, int &ptr)
 {
-    static unsigned *pu = reinterpret_cast<unsigned *>(buffer + ptr);
+    unsigned *pu = reinterpret_cast<unsigned *>(buffer + ptr);
     *pu = u;
     ptr += sizeof(u);
 }
 void Preparer::CopyToCSTR(const double d, char *buffer, int &ptr)
 {
-    static double *pd = reinterpret_cast<double *>(buffer + ptr);
+    double *pd = reinterpret_cast<double *>(buffer + ptr);
     *pd = d;
     ptr += sizeof(d);
 }
@@ -559,7 +565,7 @@ void Preparer::CopyToCSTR(const std::string &str, char *buffer, int &ptr)
         CopyToCSTR(static_cast<unsigned char>(c), buffer, ptr);
 }
 
-UserPacket GenUserPacket(const User &user)
+UserPacket Preparer::GenUserPacket(const User &user)
 {
     static UserPacket temp;
     temp.name = user.get_user_name();
@@ -588,6 +594,7 @@ ContributorPacket Preparer::GenContributorPacket(const Contributor &contributor)
 WordPacket Preparer::GenWordPacket(const Word &word)
 {
     static WordPacket temp;
+	temp.word_len = word.word.size();
     temp.word = word.word;
     temp.difficulty = word.difficulty;
     return temp;

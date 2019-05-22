@@ -1,11 +1,10 @@
 #pragma once
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
+
 #include <string>
 #include <vector>
-
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-
-#pragma comment(lib, "Ws2_32.lib")
 
 #include "user.h"
 #include "player.h"
@@ -54,9 +53,9 @@ enum FilterType
 {
     FT_NAME = 0,
     FT_LV,
-    FT_WORD,
     FT_XP,
     FT_PASSED,
+    FT_WORD,
 };
 
 struct MyPacket
@@ -102,8 +101,7 @@ class Contributor;
 class Preparer
 {
 public:
-    Preparer() = delete;
-    Preparer(WordList *word_list, AccountSys *acc_sys) : word_list_(word_list), acc_sys_(acc_sys) {}
+    Preparer() = default;
 
     void Decode(const MyPacket &my_packet);
     MyPacket Encode();
@@ -112,40 +110,40 @@ public:
 
     MyPacket raw_packet;
 
-    unsigned char kind;
-    unsigned uid;
+    unsigned char kind = 0;
+    unsigned uid = 0;
 
-    unsigned char name_len;
-    unsigned char pswd_len;
-    unsigned char word_len;
-    std::string name;
-    std::string pswd;
-    std::string word;
+    unsigned char name_len = 0;
+    unsigned char pswd_len = 0;
+    unsigned char word_len = 0;
+    std::string name = "";
+    std::string pswd = "";
+    std::string word = "";
 
-    unsigned char is_log_in;
-    unsigned char is_sign_up;
-    unsigned char is_con;
+    unsigned char is_log_in = 0;
+    unsigned char is_sign_up = 0;
+    unsigned char is_con = 0;
 
-    unsigned char user_type;
-    unsigned level;
+    unsigned char user_type = 0;
+    unsigned level = 0;
 
-    double exp;
-    unsigned passed;
+    double exp = 0;
+    unsigned passed = 0;
 
-    unsigned word_con;
+    unsigned word_con = 0;
 
-    unsigned short user_per_page;
-    unsigned short user_num;
-    unsigned page;
+    unsigned short user_per_page = 0;
+    unsigned short user_num = 0;
+    unsigned page = 0;
 
     std::vector<PlayerPacket> player_vec;
     std::vector<ContributorPacket> con_vec;
 
-    unsigned char sort_type;
-    unsigned char filter_type;
+    unsigned char sort_type = 0;
+    unsigned char filter_type = 0;
 
-    unsigned short time;
-    unsigned char round;
+    unsigned short time = 0;
+    unsigned char round = 0;
 
     std::vector<WordPacket> word_vec;
 
@@ -155,9 +153,6 @@ public:
     WordPacket GenWordPacket(const Word &word);
 
 private:
-    WordList *word_list_;
-    AccountSys *acc_sys_;
-
     std::string ReadStr(const char *buffer, int len, int &ptr);
     UserPacket ReadUserPacket(const char *buffer, int &ptr);
     PlayerPacket ReadPlayerPacket(const char *buffer, int &ptr);

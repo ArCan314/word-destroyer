@@ -1,11 +1,16 @@
 #pragma once
-
-#include <WS2tcpip.h>
 #include <WinSock2.h>
-
+#include <WS2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 
+#include <mutex>
+
 #include "my_packet.h"
+#include "my_socket.h"
+
+
+
+
 
 /*
  NAME					FLAG(1B)									DATA(VAR)																	CHECKSUM(4B)
@@ -42,13 +47,32 @@ SIGN_UP_FAIL			  25
 
 class WordList;
 class AccountSys;
+class MySocket;
 
 // server
 class ServerController
 {
 public:
 	ServerController() = delete;
-	ServerController(WordList *word_list, AccountSys *acc_sys) : word_list_(word_list), acc_sys_(acc_sys), preparer_(word_list, acc_sys) {}
+	ServerController(WordList *word_list, AccountSys *acc_sys) : word_list_(word_list), acc_sys_(acc_sys), preparer_() 
+	{
+		WSADATA wsaData;
+		WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+		addrinfo hint, *res = nullptr;
+		ZeroMemory(&hint, sizeof(hint));
+		hint.ai_protocol = IPPROTO_UDP;
+		hint.ai_family = AF_INET;
+		hint.ai_flags = AI_PASSIVE;
+		hint.ai_socktype = SOCK_DGRAM;
+		getaddrinfo("localhost", "10086", &hint, &res);
+
+		sockaddr_in *temp = reinterpret_cast<sockaddr_in *>(res->ai_addr);
+
+		client_port_ = *temp;
+
+		freeaddrinfo(res);
+	}
 	ServerController(const ServerController &other) = delete;
 	ServerController &operator=(const ServerController &rhs) = delete;
 
@@ -68,21 +92,73 @@ private:
 	bool WordCon();
 	bool LogOut();
 
-	bool LogInR();
-	bool SignUpR();
-	bool MyInfoR();
-	bool ChangeRoleR();
-	bool UserListR();
-	bool SortR();
-	bool FilterR();
-	bool SFTurnPageR();
-	bool GetWordsR();
-	bool GetACK();
-
 	WordList *word_list_;
 	AccountSys *acc_sys_;
 
+	NetPktKind kind_ = LOG_IN;
+	sockaddr_in client_port_;
+	Preparer preparer_;
+};
+
+// client
+class ClientAccountSys;
+class ClientWordList;
+struct FilterPacket;
+class ClientController
+{
+public:
+	ClientController() = delete;
+	ClientController(ClientWordList *word_list, ClientAccountSys *acc_sys) 
+		: word_list_(word_list), acc_sys_(acc_sys), send_sock_(SEND_SOCKET), preparer_(), recv_sock_(RECV_SOCKET, "10086")
+	{
+		WSADATA wsaData;
+		int e;
+		if (WSAStartup(MAKEWORD(2, 2), &wsaData))
+		{
+			// log
+			return;
+		}
+		addrinfo hint, *res = 0;
+
+		ZeroMemory(&hint, sizeof(hint));
+		hint.ai_family = AF_INET;
+		hint.ai_protocol = IPPROTO_UDP;
+		hint.ai_flags = AI_PASSIVE;
+		hint.ai_socktype = SOCK_DGRAM;
+		if (getaddrinfo("localhost", "9961", &hint, &res))
+		{
+			// log
+			return;
+		}
+
+		sockaddr_in *temp = reinterpret_cast<sockaddr_in *>(res->ai_addr);
+		server_addr_ = *temp;
+		freeaddrinfo(res);
+	}
+	ClientController(const ClientController &other) = delete;
+	ClientController &operator=(const ClientController &rhs) = delete;
+
+	bool LogIn(const std::string &name, const std::string &pswd);
+	bool SignUp(const std::string &name, const std::string &pswd);
+	bool MyInfo(const unsigned uid);
+	bool ChangeRole(const unsigned uid);
+	bool UserList(const unsigned char utype, unsigned short user_per_page, unsigned page);
+	bool Sort(unsigned uid, const unsigned char utype, unsigned short user_per_page, unsigned char sort_type);
+	bool Filter(unsigned uid, const unsigned char utype, unsigned short user_per_page, const FilterPacket &filter_packet);
+	bool SFTurnPage(unsigned uid, const unsigned char utype, unsigned short user_per_page, unsigned page);
+	bool GetWord(unsigned passed);
+	bool IncXp(unsigned uid, double exp);
+	bool WordCon(unsigned uid, const std::string &word);
+	bool LogOut(unsigned uid);
+
+private:
+	ClientWordList *word_list_;
+	ClientAccountSys *acc_sys_;
+
 	NetPktKind kind_;
 	Preparer preparer_;
-	sockaddr_in from_;
+	sockaddr_in server_addr_;
+
+	MySocket send_sock_;
+	MySocket recv_sock_;
 };

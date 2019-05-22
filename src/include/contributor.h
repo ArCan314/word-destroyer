@@ -24,6 +24,7 @@ public:
 
 	void from_player(const Player &player);
 
+	void set_word_contributed(unsigned word_con) { word_contributed_ = word_con; }
 	void inc_word_contributed() { word_contributed_++; inc_level(); }
 	int get_word_contributed() const { return word_contributed_; }
 

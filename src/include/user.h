@@ -30,7 +30,7 @@ public:
 
     const std::string &get_password() const { return pswd_; }
     const std::string &get_user_name() const { return name_; }
-
+    void set_level(unsigned level) { level_ = level;}
     void set_user_type(UserType u) { user_type_ = u; }
     UserType get_user_type() const { return user_type_; }
 

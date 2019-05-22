@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <vector>
 #include <set>
 #include <string>
@@ -55,8 +56,25 @@ private:
 
     std::set<std::string> word_set_;
     std::vector<Word> word_vec_;
-	std::vector<std::size_t> diff_vec_;
+    std::vector<std::size_t> diff_vec_;
     unsigned last_origin_ = 0;
     bool is_updated = false;
     static const std::string word_path_;
+};
+
+class ClientWordList
+{
+public:
+    ClientWordList() = default;
+
+    void AddWord(const std::pair<std::string, int> &word);
+    bool get_word(std::pair<std::string, int> &buffer);
+
+    unsigned short time;
+    unsigned char round;
+
+    ~ClientWordList() = default;
+
+private:
+    std::deque<std::pair<std::string, int>> word_queue_;
 };

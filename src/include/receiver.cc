@@ -1,5 +1,5 @@
-#include "WS2tcpip.h"
 #include "WinSock2.h"
+#include "WS2tcpip.h"
 #pragma comment(lib, "Ws2_32.lib")
 
 #include "my_packet.h"
@@ -7,7 +7,7 @@
 #include "job_queue.h"
 #include "receiver.h"
 
-void Receiver::start()
+void Receiver::Start()
 {
     while (true)
     {

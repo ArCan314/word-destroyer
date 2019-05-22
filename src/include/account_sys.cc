@@ -3,6 +3,7 @@
 #include <fstream>
 #include <set>
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include "account_sys.h"
@@ -11,7 +12,9 @@
 #include "log.h"
 
 const std::string AccountSys::account_path_ = "../data/acnt.dat";
+
 unsigned AccountSys::uid_ = 0;
+unsigned ClientAccountSys::uid_ = 0;
 
 AccountSys::AccountSys()
 {
@@ -103,8 +106,8 @@ bool AccountSys::LogIn(const std::string &name, const std::string &password)
 			default:
 				break;
 			}
-			uid_map_.at(uid_) = name;
-			rev_uid_map_.at(name) = uid_;
+			uid_map_[uid_] = name;
+			rev_uid_map_[name] = uid_;
 			uid_++;
 			// current_user_str_ = name;
 			return true;
@@ -141,11 +144,38 @@ bool AccountSys::SignUp(const std::string &name, const std::string &password, Us
 			break;
 		}
 		// current_user_str_ = name;
-		uid_map_.at(uid_) = name;
-		rev_uid_map_.at(name) = uid_;
+		uid_map_[uid_] = name;
+		rev_uid_map_[name] = uid_;
 		uid_++;
 		total_user_++;
 		return true;
+	}
+}
+
+void AccountSys::LogOut(const unsigned uid)
+{
+	std::string name = get_name(uid);
+	if (uid_map_.count(uid))
+		uid_map_.erase(uid);
+	if (rev_uid_map_.count(name))
+		rev_uid_map_.erase(name);
+	if (previous_filter_type_.count(uid))
+		previous_filter_type_.erase(uid);
+	if (previous_sort_type_.count(uid))
+		previous_sort_type_.erase(uid);
+
+	if (get_usertype(name) == USERTYPE_P)
+	{
+		online_players_.erase(player_map_.at(name));
+		if (uid_player_map_.count(uid))
+			uid_player_map_.erase(uid);
+
+	}
+	else
+	{
+		online_contributors_.erase(con_map_.at(name));
+		if (uid_contributor_map_.count(uid))
+			uid_contributor_map_.erase(uid);
 	}
 }
 
@@ -261,17 +291,20 @@ AccountSys::get_contributor_page(int page, int user_per_page) const
 
 	if (contributors_.size() <= (page)*user_per_page)
 	{
-		b = contributors_.cbegin() + (page - 1) * user_per_page;
-		e = contributors_.cbegin() + (page)*user_per_page;
-	}
-	else if (contributors_.size() >= (page - 1) * user_per_page)
-	{
-		b = contributors_.cbegin() + (page - 1) * user_per_page;
-		e = contributors_.cend();
+		if (contributors_.size() > (page - 1) * user_per_page)
+		{
+			b = contributors_.cbegin() + (page - 1) * user_per_page;
+			e = contributors_.cend();
+		}
+		else
+		{
+			b = e = contributors_.cbegin();
+		}
 	}
 	else
 	{
-		b = e = contributors_.cbegin();
+		b = contributors_.cbegin() + (page - 1) * user_per_page;
+		e = contributors_.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -283,17 +316,20 @@ AccountSys::get_player_page(int page, int user_per_page) const
 
 	if (players_.size() <= (page)*user_per_page)
 	{
-		b = players_.cbegin() + (page - 1) * user_per_page;
-		e = players_.cbegin() + (page)*user_per_page;
-	}
-	else if (players_.size() >= (page - 1) * user_per_page)
-	{
-		b = players_.cbegin() + (page - 1) * user_per_page;
-		e = players_.cend();
+		if (players_.size() > (page - 1) * user_per_page)
+		{
+			b = players_.cbegin() + (page - 1) * user_per_page;
+			e = players_.cend();
+		}
+		else
+		{
+			b = e = players_.cbegin();
+		}
 	}
 	else
 	{
-		b = e = players_.cbegin();
+		b = players_.cbegin() + (page - 1) * user_per_page;
+		e = players_.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -306,15 +342,6 @@ enum SortSelection
 	SORTS_PASS,
 	SORTS_CON
 };
-
-enum FilterPackType
-{
-	FPT_NAME = 0,
-	FPT_LV,
-	FPT_EXP,
-	FPT_PASS,
-	FPT_CON
-} type;
 
 std::pair<std::vector<Contributor>::const_iterator, std::vector<Contributor>::const_iterator>
 AccountSys::get_sort_con_page(int uid, int page, int user_per_page, int sort_type)
@@ -344,10 +371,10 @@ AccountSys::get_sort_con_page(int uid, int page, int user_per_page, int sort_typ
 			std::sort(con_vec_p->begin(), con_vec_p->end(), [](const Contributor &a, const Contributor &b) { return a.get_user_name() < b.get_user_name(); });
 			break;
 		case SORTS_LEVEL:
-			std::sort(con_vec_p->begin(), con_vec_p->end(), [](const Contributor &a, const Contributor &b) { return a.get_level() < b.get_level(); });
+			std::sort(con_vec_p->rbegin(), con_vec_p->rend(), [](const Contributor &a, const Contributor &b) { return a.get_level() < b.get_level(); });
 			break;
 		case SORTS_CON:
-			std::sort(con_vec_p->begin(), con_vec_p->end(), [](const Contributor &a, const Contributor &b) { return a.get_word_contributed() < b.get_word_contributed(); });
+			std::sort(con_vec_p->rbegin(), con_vec_p->rend(), [](const Contributor &a, const Contributor &b) { return a.get_word_contributed() < b.get_word_contributed(); });
 			break;
 		default:
 			break;
@@ -356,19 +383,22 @@ AccountSys::get_sort_con_page(int uid, int page, int user_per_page, int sort_typ
 
 	std::vector<Contributor>::const_iterator b, e;
 	std::vector<Contributor> &vec = uid_contributor_map_.at(uid);
-	if (uid_contributor_map_.at(uid).size() <= (page)*user_per_page)
+	if (vec.size() <= (page)*user_per_page)
 	{
-		b = vec.cbegin() + (page - 1) * user_per_page;
-		e = vec.cbegin() + (page)*user_per_page;
-	}
-	else if (vec.size() >= (page - 1) * user_per_page)
-	{
-		b = vec.cbegin() + (page - 1) * user_per_page;
-		e = vec.cend();
+		if (vec.size() > (page - 1) * user_per_page)
+		{
+			b = vec.cbegin() + (page - 1) * user_per_page;
+			e = vec.cend();
+		}
+		else
+		{
+			b = e = vec.cbegin();
+		}
 	}
 	else
 	{
-		b = e = vec.cbegin();
+		b = vec.cbegin() + (page - 1) * user_per_page;
+		e = vec.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -401,13 +431,13 @@ AccountSys::get_sort_player_page(int uid, int page, int user_per_page, int sort_
 			std::sort(player_map_p->begin(), player_map_p->end(), [](const Player &a, const Player &b) { return a.get_user_name() < b.get_user_name(); });
 			break;
 		case SORTS_LEVEL:
-			std::sort(player_map_p->begin(), player_map_p->end(), [](const Player &a, const Player &b) { return a.get_level() < b.get_level(); });
+			std::sort(player_map_p->rbegin(), player_map_p->rend(), [](const Player &a, const Player &b) { return a.get_level() < b.get_level(); });
 			break;
 		case SORTS_EXP:
-			std::sort(player_map_p->begin(), player_map_p->end(), [](const Player &a, const Player &b) { return a.get_exp() < b.get_exp(); });
+			std::sort(player_map_p->rbegin(), player_map_p->rend(), [](const Player &a, const Player &b) { return a.get_exp() < b.get_exp(); });
 			break;
 		case SORTS_PASS:
-			std::sort(player_map_p->begin(), player_map_p->end(), [](const Player &a, const Player &b) { return a.get_level_passed() < b.get_level_passed(); });
+			std::sort(player_map_p->rbegin(), player_map_p->rend(), [](const Player &a, const Player &b) { return a.get_level_passed() < b.get_level_passed(); });
 			break;
 		default:
 			break;
@@ -418,17 +448,20 @@ AccountSys::get_sort_player_page(int uid, int page, int user_per_page, int sort_
 	std::vector<Player> &vec = uid_player_map_.at(uid);
 	if (vec.size() <= (page)*user_per_page)
 	{
-		b = vec.cbegin() + (page - 1) * user_per_page;
-		e = vec.cbegin() + (page)*user_per_page;
-	}
-	else if (vec.size() >= (page - 1) * user_per_page)
-	{
-		b = vec.cbegin() + (page - 1) * user_per_page;
-		e = vec.cend();
+		if (vec.size() > (page - 1) * user_per_page)
+		{
+			b = vec.cbegin() + (page - 1) * user_per_page;
+			e = vec.cend();
+		}
+		else
+		{
+			b = e = vec.cbegin();
+		}
 	}
 	else
 	{
-		b = e = vec.cbegin();
+		b = vec.cbegin() + (page - 1) * user_per_page;
+		e = vec.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -438,24 +471,24 @@ AccountSys::get_filter_con_page(int uid, int page, int user_per_page, FilterPack
 {
 	if (!previous_filter_type_.count(uid) || filter_packet != previous_filter_type_.at(uid))
 	{
-		previous_filter_type_.at(uid) = filter_packet;
-		uid_contributor_map_.at(uid) = std::vector<Contributor>();
+		previous_filter_type_[uid] = filter_packet;
+		uid_contributor_map_[uid] = std::vector<Contributor>();
 		std::vector<Contributor> &temp = uid_contributor_map_.at(uid);
 		switch (filter_packet.filter_type)
 		{
 		case FPT_NAME:
 			for (auto i = contributors_.cbegin(); i != contributors_.cend(); ++i)
-				if ((*i).get_user_name() == filter_packet.value.val_str)
+				if ((*i).get_user_name() == filter_packet.val_str)
 					temp.push_back(*i);
 			break;
 		case FPT_LV:
 			for (auto i = contributors_.cbegin(); i != contributors_.cend(); ++i)
-				if ((*i).get_level() == filter_packet.value.val_32)
+				if ((*i).get_level() == filter_packet.val_32)
 					temp.push_back(*i);
 			break;
 		case FPT_CON:
 			for (auto i = contributors_.cbegin(); i != contributors_.cend(); ++i)
-				if ((*i).get_word_contributed() == filter_packet.value.val_32)
+				if ((*i).get_word_contributed() == filter_packet.val_32)
 					temp.push_back(*i);
 			break;
 		default:
@@ -466,17 +499,20 @@ AccountSys::get_filter_con_page(int uid, int page, int user_per_page, FilterPack
 	std::vector<Contributor>::const_iterator b, e;
 	if (con_vec.size() <= (page)*user_per_page)
 	{
-		b = con_vec.cbegin() + (page - 1) * user_per_page;
-		e = con_vec.cbegin() + (page)*user_per_page;
-	}
-	else if (con_vec.size() >= (page - 1) * user_per_page)
-	{
-		b = con_vec.cbegin() + (page - 1) * user_per_page;
-		e = con_vec.cend();
+		if (con_vec.size() > (page - 1) * user_per_page)
+		{
+			b = con_vec.cbegin() + (page - 1) * user_per_page;
+			e = con_vec.cend();
+		}
+		else
+		{
+			b = e = con_vec.cbegin();
+		}
 	}
 	else
 	{
-		b = e = con_vec.cbegin();
+		b = con_vec.cbegin() + (page - 1) * user_per_page;
+		e = con_vec.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -486,29 +522,29 @@ AccountSys::get_filter_player_page(int uid, int page, int user_per_page, FilterP
 {
 	if (!previous_filter_type_.count(uid) || filter_packet != previous_filter_type_.at(uid))
 	{
-		previous_filter_type_.at(uid) = filter_packet;
-		uid_player_map_.at(uid) = std::vector<Player>();
+		previous_filter_type_[uid] = filter_packet;
+		uid_player_map_[uid] = std::vector<Player>();
 		std::vector<Player> &temp = uid_player_map_.at(uid);
 		switch (filter_packet.filter_type)
 		{
 		case FPT_NAME:
 			for (auto i = players_.cbegin(); i != players_.cend(); ++i)
-				if ((*i).get_user_name() == filter_packet.value.val_str)
+				if ((*i).get_user_name() == filter_packet.val_str)
 					temp.push_back(*i);
 			break;
 		case FPT_LV:
 			for (auto i = players_.cbegin(); i != players_.cend(); ++i)
-				if ((*i).get_level() == filter_packet.value.val_32)
+				if ((*i).get_level() == filter_packet.val_32)
 					temp.push_back(*i);
 			break;
 		case FPT_EXP:
 			for (auto i = players_.cbegin(); i != players_.cend(); ++i)
-				if ((*i).get_exp() == filter_packet.value.val_double)
+				if ((*i).get_exp() == filter_packet.val_double)
 					temp.push_back(*i);
 			break;
 		case FPT_PASS:
 			for (auto i = players_.cbegin(); i != players_.cend(); ++i)
-				if ((*i).get_level_passed() == filter_packet.value.val_32)
+				if ((*i).get_level_passed() == filter_packet.val_32)
 					temp.push_back(*i);
 			break;
 		default:
@@ -520,17 +556,20 @@ AccountSys::get_filter_player_page(int uid, int page, int user_per_page, FilterP
 	std::vector<Player>::const_iterator b, e;
 	if (player_vec.size() <= (page)*user_per_page)
 	{
-		b = player_vec.cbegin() + (page - 1) * user_per_page;
-		e = player_vec.cbegin() + (page)*user_per_page;
-	}
-	else if (player_vec.size() >= (page - 1) * user_per_page)
-	{
-		b = player_vec.cbegin() + (page - 1) * user_per_page;
-		e = player_vec.cend();
+		if (player_vec.size() > (page - 1) * user_per_page)
+		{
+			b = player_vec.cbegin() + (page - 1) * user_per_page;
+			e = player_vec.cend();
+		}
+		else
+		{
+			b = e = player_vec.cbegin();
+		}
 	}
 	else
 	{
-		b = e = player_vec.cbegin();
+		b = player_vec.cbegin() + (page - 1) * user_per_page;
+		e = player_vec.cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
 }
@@ -542,18 +581,22 @@ AccountSys::SortFilterTurnPageP(int uid, int page, int user_per_page)
 
 	if (uid_player_map_.at(uid).size() <= (page)*user_per_page)
 	{
-		b = uid_player_map_.at(uid).cbegin() + (page - 1) * user_per_page;
-		e = uid_player_map_.at(uid).cbegin() + (page)*user_per_page;
-	}
-	else if (uid_player_map_.at(uid).size() >= (page - 1) * user_per_page)
-	{
-		b = uid_player_map_.at(uid).cbegin() + (page - 1) * user_per_page;
-		e = uid_player_map_.at(uid).cend();
+		if (uid_player_map_.at(uid).size() > (page - 1) * user_per_page)
+		{
+			b = uid_player_map_.at(uid).cbegin() + (page - 1) * user_per_page;
+			e = uid_player_map_.at(uid).cend();
+		}
+		else
+		{
+			b = e = uid_player_map_.at(uid).cbegin();
+		}
 	}
 	else
 	{
-		b = e = uid_player_map_.at(uid).cbegin();
+		b = uid_player_map_.at(uid).cbegin() + (page - 1) * user_per_page;
+		e = uid_player_map_.at(uid).cbegin() + (page)*user_per_page;
 	}
+
 	return {b, e};
 }
 
@@ -564,17 +607,32 @@ AccountSys::SortFilterTurnPageC(int uid, int page, int user_per_page)
 
 	if (uid_contributor_map_.at(uid).size() <= (page)*user_per_page)
 	{
-		b = uid_contributor_map_.at(uid).cbegin() + (page - 1) * user_per_page;
-		e = uid_contributor_map_.at(uid).cbegin() + (page)*user_per_page;
-	}
-	else if (uid_contributor_map_.at(uid).size() >= (page - 1) * user_per_page)
-	{
-		b = uid_contributor_map_.at(uid).cbegin() + (page - 1) * user_per_page;
-		e = uid_contributor_map_.at(uid).cend();
+		if (uid_contributor_map_.at(uid).size() > (page - 1) * user_per_page)
+		{
+			b = uid_contributor_map_.at(uid).cbegin() + (page - 1) * user_per_page;
+			e = uid_contributor_map_.at(uid).cend();
+		}
+		else
+		{
+			b = e = uid_contributor_map_.at(uid).cbegin();
+		}
 	}
 	else
 	{
-		b = e = uid_contributor_map_.at(uid).cbegin();
+		b = uid_contributor_map_.at(uid).cbegin() + (page - 1) * user_per_page;
+		e = uid_contributor_map_.at(uid).cbegin() + (page)*user_per_page;
 	}
 	return {b, e};
+}
+
+void ClientAccountSys::set_player_vec(std::vector<Player>::const_iterator b, std::vector<Player>::const_iterator e)
+{
+	player_vec_.clear();
+	std::copy(b, e, std::back_insert_iterator<std::vector<Player>>(player_vec_));
+}
+
+void ClientAccountSys::set_contributor_vec(std::vector<Contributor>::const_iterator b, std::vector<Contributor>::const_iterator e)
+{
+	con_vec_.clear();
+	std::copy(b, e, std::back_insert_iterator<std::vector<Contributor>>(con_vec_));
 }

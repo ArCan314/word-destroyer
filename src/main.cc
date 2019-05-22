@@ -1,8 +1,6 @@
-#define CLIENT
-
+// #define CLIENT
+#define SERVER
 #ifdef CLIENT
-#include "Windows.h"
-
 #include <cstdlib>
 #include <iostream>
 
@@ -12,14 +10,16 @@
 #include <cctype>
 
 #include "include/account_sys.h"
-#include "include/contributor.h"
-
-
 #include "include/log.h"
 #include "include/player.h"
 #include "include/contributor.h"
-#include "include/console_io.h"
 #include "include/word_list.h"
+#include "include/controller.h"
+
+
+#include "include/console_io.h"
+#include "Windows.h"
+
 
 void InitConsole()
 {
@@ -48,8 +48,9 @@ std::string t(const std::string &s)
 */
 int main()
 {
-	AccountSys acc_sys;
-	WordList word_list;
+	ClientAccountSys acc_sys;
+	ClientWordList word_list;
+	ClientController controller(&word_list, &acc_sys);
 	// DWORD dwErrCode;
 	/*
 	auto t = [](const std::string &s) {
@@ -94,14 +95,68 @@ int main()
 	InitConsole();
 	ConsoleIO::set_account_sys_ptr(&acc_sys);
 	ConsoleIO::set_wordlist_ptr(&word_list);
+	ConsoleIO::set_controller_ptr(&controller);
 	ConsoleIO::IO_Start();
 
 	// std::cin >> std::string();
 	Log::CloseLog();
 	return 0;
 }
-#else	// SERVER
+/*
+int main()
+{
+	std::thread	c(Client);
+	std::thread s(Server);
+	c.join(), s.join();
+	return 0;
+}
+*/
+#endif
+
+#ifdef SERVER
+
+#include <thread>
+#include <vector>
+#include <utility>
+#include <chrono>
+
+#include "include/job_queue.h"
+#include "include/receiver.h"
+#include "include/resolver.h"
+#include "include/controller.h"
+#include "include/word_list.h"
+#include "include/account_sys.h"
+
+void Recvr(JobQueue *queue)
+{
+	Receiver recvr(queue);
+	recvr.Start();
+}
+
+void Resolvr(JobQueue *queue, ServerController *controller)
+{
+	Resolver resolvr(queue, controller);
+	resolvr.Start();
+}
 
 
+int main()
+{
+	int thread_num = 4;
+	AccountSys acc_sys;
+	WordList word_list;
+	ServerController controller(&word_list, &acc_sys);
+	JobQueue job_queue;
+
+	std::vector<std::thread> Resolvrs;
+	for (int i = 0; i < thread_num; i++)
+		Resolvrs.push_back(std::thread(Resolvr, &job_queue, &controller));
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	std::thread Rcver(Recvr, &job_queue);
+	for (int i = 0; i < thread_num; i++)
+		Resolvrs.at(i).join();
+	Rcver.join();
+	return 0;
+}
 
 #endif

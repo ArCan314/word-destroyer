@@ -11,14 +11,6 @@
 #include "contributor.h"
 enum UserType;
 
-union FilterValue {
-	std::string val_str;
-	unsigned val_32;
-	double val_double;
-	FilterValue() { std::memset(this, 0, sizeof(FilterValue)); }
-	~FilterValue() { std::memset(this, 0, sizeof(FilterValue)); }
-} value;
-
 enum FilterPackType
 {
 	FPT_NAME = 0,
@@ -26,33 +18,15 @@ enum FilterPackType
 	FPT_EXP,
 	FPT_PASS,
 	FPT_CON
-} type;
+};
 
 struct FilterPacket
 {
-	FilterPacket() : filter_type(0), value() {}
+	FilterPacket() : filter_type(0), val_str(), val_32(0), val_double(0) {}
 	int filter_type;
-	FilterValue value;
-
-	FilterPacket(const FilterPacket &other) : filter_type(other.filter_type)
-	{
-		switch (filter_type)
-		{
-		case FPT_NAME:
-			value.val_str = other.value.val_str;
-			break;
-		case FPT_LV:
-		case FPT_CON:
-		case FPT_PASS:
-			value.val_32 = other.value.val_32;
-			break;
-		case FPT_EXP:
-			value.val_double = other.value.val_double;
-			break;
-		default:
-			break;
-		}
-	}
+	std::string val_str;
+	unsigned val_32;
+	double val_double;
 
 	FilterPacket &operator=(const FilterPacket &rhs)
 	{
@@ -60,15 +34,15 @@ struct FilterPacket
 		switch (filter_type)
 		{
 		case FPT_NAME:
-			value.val_str = rhs.value.val_str;
+			val_str = rhs.val_str;
 			break;
 		case FPT_LV:
 		case FPT_CON:
 		case FPT_PASS:
-			value.val_32 = rhs.value.val_32;
+			val_32 = rhs.val_32;
 			break;
 		case FPT_EXP:
-			value.val_double = rhs.value.val_double;
+			val_double = rhs.val_double;
 			break;
 		default:
 			break;
@@ -84,15 +58,15 @@ struct FilterPacket
 			switch (filter_type)
 			{
 			case FPT_NAME:
-				res = (value.val_str == rhs.value.val_str);
+				res = (val_str == rhs.val_str);
 				break;
 			case FPT_LV:
 			case FPT_CON:
 			case FPT_PASS:
-				res = (value.val_32 == rhs.value.val_32);
+				res = (val_32 == rhs.val_32);
 				break;
 			case FPT_EXP:
-				res = (value.val_double == rhs.value.val_double);
+				res = (val_double == rhs.val_double);
 				break;
 			default:
 				break;
@@ -115,7 +89,7 @@ public:
 
 	bool LogIn(const std::string &name, const std::string &password);
 	bool SignUp(const std::string &name, const std::string &password, UserType utype);
-	void LogOut(const std::string &name);
+	void LogOut(const unsigned uid);
 
 	constexpr std::size_t get_min_acc_len() { return 4; }
 	constexpr std::size_t get_min_pswd_len() { return 9; }
@@ -233,4 +207,71 @@ private:
 	std::map<int, std::vector<Player>> uid_player_map_;
 	std::map<int, std::vector<Contributor>> uid_contributor_map_;
 	int total_user_ = 0;
+};
+
+class ClientAccountSys
+{
+public:
+	ClientAccountSys() = default;
+	~ClientAccountSys() = default;
+
+	void set_user(unsigned uid, const Player &player)
+	{
+		uid_ = uid;
+		utype_ = USERTYPE_P;
+		name_ = player.get_user_name();
+		player_ = player;
+	}
+	void set_user(unsigned uid, const Contributor &contributor)
+	{
+		uid_ = uid;
+		utype_ = USERTYPE_C;
+		name_ = contributor.get_user_name();
+		con_ = contributor;
+	}
+	constexpr std::size_t get_min_acc_len() { return 4; }
+	constexpr std::size_t get_min_pswd_len() { return 8; }
+	void set_uid(unsigned uid) { uid_ = uid; }
+	void set_utype(const UserType utype) { utype_ = utype; }
+	UserType get_utype() const { return utype_; }
+
+	Player &get_player() { return player_; }
+
+	Contributor &get_con() { return con_; }
+
+	unsigned get_uid() const { return uid_; }
+
+	void set_player_vec(std::vector<Player>::const_iterator b, std::vector<Player>::const_iterator e);
+	void set_contributor_vec(std::vector<Contributor>::const_iterator b, std::vector<Contributor>::const_iterator e);
+
+	std::vector<Player> &get_player_vec() { return player_vec_; }
+	std::vector<Contributor> &get_con_vec() { return con_vec_; }
+	std::string get_utype_str(UserType utype) const
+	{
+		return (utype == USERTYPE_P) ? "Player" : "Contributor";
+	}
+
+	void change_user_type() 
+	{
+		if (utype_ == USERTYPE_P)
+		{
+			con_.from_player(player_);
+		}
+		else
+		{
+			player_.from_contributor(con_);
+		}
+		utype_ = (utype_ == USERTYPE_P) ? USERTYPE_C : USERTYPE_P;
+	}
+
+private:
+	static unsigned uid_;
+	UserType utype_;
+	std::string name_;
+
+	Contributor con_;
+	Player player_;
+
+	std::vector<Player> player_vec_;
+	std::vector<Contributor> con_vec_;
 };

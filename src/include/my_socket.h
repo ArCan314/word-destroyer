@@ -1,9 +1,9 @@
 #pragma once
-#include <string>
-
-#include <WS2tcpip.h>
 #include <WinSock2.h>
+#include <Ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
+
+#include <string>
 
 enum SocketType
 {
@@ -27,12 +27,13 @@ public:
 	MyPacket RecvFrom();
 
 	bool SendTo(const MyPacket &queue_data);
-
+	/*
 	std::string get_ip_recver_str() const 
 	{
 		static char buffer[20];
 		return std::string(inet_ntop(my_addr_info_.sin_family, &(my_addr_info_.sin_addr), buffer, 20)); 
 	}
+	*/
 	unsigned short get_port_recver() const { return my_addr_info_.sin_port; }
 	std::string get_port_recver_str() const { return std::to_string(htons(my_addr_info_.sin_port)); }
 

@@ -1,9 +1,9 @@
+#include <WS2tcpip.h>
+#include <Winsock2.h>
+#pragma comment(lib, "Ws2_32.lib")
+
 #include <random>
 #include <cstring>
-
-#include <Winsock2.h>
-#include <WS2tcpip.h>
-#pragma comment(lib, "Ws2_32.lib")
 
 #include "my_socket.h"
 #include "my_packet.h"
@@ -84,7 +84,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 	hint.ai_protocol = IPPROTO_UDP;
 	hint.ai_flags = AI_PASSIVE;
 
-	last_error_ = getaddrinfo(NULL, port, &hint, &result);
+	last_error_ = getaddrinfo("localhost", port, &hint, &result);
 	if (last_error_)
 	{
 		// log write

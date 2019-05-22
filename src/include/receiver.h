@@ -1,13 +1,14 @@
 #pragma once
 
-#include "WS2tcpip.h"
-#include "WinSock2.h"
+#include <WinSock2.h>
+#include <WS2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 
 #include "my_socket.h"
 
 class JobQueue;
 
+// server
 class Receiver
 {
 public:
@@ -18,7 +19,7 @@ public:
     Receiver(JobQueue* job_queue) : sockrecv_(RECV_SOCKET, "9961"), job_queue_(job_queue){}
     ~Receiver() = default;
     
-	void start();
+	void Start();
 
 private:
 
@@ -26,3 +27,4 @@ private:
 
 	MySocket sockrecv_;
 };
+

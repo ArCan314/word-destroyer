@@ -4,15 +4,18 @@
 class AccountSys;
 class WordList;
 enum NextPage;
-
+class ClientWordList;
+class ClientAccountSys;
+class ClientController;
 namespace ConsoleIO
 {
 #include "Windows.h"
 
 	void InitAttr();
 
-	void set_account_sys_ptr(AccountSys *);
-	void set_wordlist_ptr(WordList *);
+	void set_account_sys_ptr(ClientAccountSys *);
+	void set_wordlist_ptr(ClientWordList *);
+	void set_controller_ptr(ClientController *);
 	DWORD IO_Start(); 
 	DWORD IOD_Start();
 	// return ErrorCode

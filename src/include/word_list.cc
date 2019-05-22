@@ -40,26 +40,26 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
 const Word &WordList::get_word(int level)
 {
     static std::random_device r;
-	int min_diff = 0;
-	int max_diff = diff_vec_.size() - 1;
-	int diff = level / 10;
-	int diff_lb = diff - 5;
-	int diff_ub = diff + 2;
-	int lb, ub;
-	if (diff_lb > max_diff)
-	{
-		lb = max_diff - 5;
-		ub = max_diff;
-	}
-	else
-	{
-		lb = (diff_lb > min_diff) ? diff_lb : min_diff;
-		ub = (diff_ub < max_diff) ? diff_ub : max_diff;
-	}
+    int min_diff = 0;
+    int max_diff = diff_vec_.size() - 1;
+    int diff = level / 10;
+    int diff_lb = diff - 5;
+    int diff_ub = diff + 2;
+    int lb, ub;
+    if (diff_lb > max_diff)
+    {
+        lb = max_diff - 5;
+        ub = max_diff;
+    }
+    else
+    {
+        lb = (diff_lb > min_diff) ? diff_lb : min_diff;
+        ub = (diff_ub < max_diff) ? diff_ub : max_diff;
+    }
 
-	std::uniform_int_distribution<int> uni_rd(diff_vec_[lb], diff_vec_[ub]);
-	return word_vec_.at(uni_rd(r));
-	/*
+    std::uniform_int_distribution<int> uni_rd(diff_vec_[lb], diff_vec_[ub]);
+    return word_vec_.at(uni_rd(r));
+    /*
 	if (level <= 60)
 	{
 		std::uniform_int_distribution<int> uni_rd((level - 1) * 100, 100 * level);
@@ -137,53 +137,53 @@ WordSerializationWarp WordList::Serialize(const Word &warp)
 void WordList::get_chksum(WordSerializationWarp &warp)
 {
     unsigned char chksum = 0;
-	chksum = warp.len + warp.word_len + warp.name_len + warp.total + warp.correct + warp.diff;
-	// don't release byte
-	char *byte = warp.word.get();
-	for (int i = 0; i < warp.word_len; i++)
-	{
-		chksum += *byte;
-		byte++;
-	}
-	byte = warp.name.get();
-	for (int i = 0; i < warp.name_len; i++)
-	{
-		chksum += *byte;
-		byte++;
-	}
+    chksum = warp.len + warp.word_len + warp.name_len + warp.total + warp.correct + warp.diff;
+    // don't release byte
+    char *byte = warp.word.get();
+    for (int i = 0; i < warp.word_len; i++)
+    {
+        chksum += *byte;
+        byte++;
+    }
+    byte = warp.name.get();
+    for (int i = 0; i < warp.name_len; i++)
+    {
+        chksum += *byte;
+        byte++;
+    }
     warp.chksum = chksum;
 }
 
 int WordList::get_difficulty(const std::string &word)
 {
     bool is_upper = std::isupper(word.front());
-	int upper = 0;
-	int lower = 0;
+    int upper = 0;
+    int lower = 0;
     int len = word.length();
-	int change_time = 0;
-	for (auto c : word)
-	{
-		if (std::isupper(c))
-		{
-			if (!is_upper)
-			{
-				change_time++;
-				is_upper = true;
-			}
-			upper++;
-		}
-		else
-		{
-			if (is_upper)
-			{
-				change_time++;
-				is_upper = false;
-			}
-			lower++;
-		}
-	}
+    int change_time = 0;
+    for (auto c : word)
+    {
+        if (std::isupper(c))
+        {
+            if (!is_upper)
+            {
+                change_time++;
+                is_upper = true;
+            }
+            upper++;
+        }
+        else
+        {
+            if (is_upper)
+            {
+                change_time++;
+                is_upper = false;
+            }
+            lower++;
+        }
+    }
 
-	double difficulty = len * 1.1 + change_time * 0.3 + (static_cast<long long>(upper) - lower) * 0.5;
+    double difficulty = len * 1.1 + change_time * 0.3 + (static_cast<long long>(upper) - lower) * 0.5;
 
     return difficulty;
 }
@@ -201,24 +201,24 @@ bool WordList::Load()
             temp = Deserialize(ifs);
             if (ifs && temp.word.size() && temp.contributor.size())
             {
-				// if (!temp.difficulty)
-				temp.difficulty = get_difficulty(temp.word);
+                // if (!temp.difficulty)
+                temp.difficulty = get_difficulty(temp.word);
                 word_vec_.push_back(temp);
                 word_set_.insert(std::move(temp.word));
             }
         }
         last_origin_ = word_vec_.size();
-		std::sort(word_vec_.begin(), word_vec_.end(), [](const Word & a, const Word & b) { return a.difficulty < b.difficulty; });
-		std::set<int> diff_set;
-		for (std::size_t i = 0; i < word_vec_.size(); i++)
-		{
-			int temp_diff = word_vec_.at(i).difficulty;
-			if (!diff_set.count(temp_diff))
-			{
-				diff_set.insert(temp_diff);
-				diff_vec_.push_back(i);
-			}
-		}
+        std::sort(word_vec_.begin(), word_vec_.end(), [](const Word &a, const Word &b) { return a.difficulty < b.difficulty; });
+        std::set<int> diff_set;
+        for (std::size_t i = 0; i < word_vec_.size(); i++)
+        {
+            int temp_diff = word_vec_.at(i).difficulty;
+            if (!diff_set.count(temp_diff))
+            {
+                diff_set.insert(temp_diff);
+                diff_vec_.push_back(i);
+            }
+        }
         return true;
     }
     else
@@ -251,8 +251,8 @@ Word WordList::Deserialize(std::ifstream &ifs)
 
     if (expect_chksum != temp.chksum)
     {
-		Log::WriteLog(std::string("WordList: ") + temp.word.get() + " checksum error, expected :" +
-					  std::to_string(static_cast<int>(expect_chksum)) + ", actually : " + std::to_string(static_cast<int>(temp.chksum)));
+        Log::WriteLog(std::string("WordList: ") + temp.word.get() + " checksum error, expected :" +
+                      std::to_string(static_cast<int>(expect_chksum)) + ", actually : " + std::to_string(static_cast<int>(temp.chksum)));
         temp.len = 0;
         return {"", "", 0, 0, 0};
     }
@@ -265,5 +265,24 @@ Word WordList::Deserialize(std::ifstream &ifs)
         for (std::size_t i = 0; i < temp.name_len; i++)
             res.contributor.push_back(temp.name[i]);
         return res;
+    }
+}
+
+void ClientWordList::AddWord(const std::pair<std::string, int> &word)
+{
+    word_queue_.push_back(word);
+}
+
+bool ClientWordList::get_word(std::pair<std::string, int> &buffer)
+{
+    if (word_queue_.size())
+    {
+        buffer = std::move(word_queue_.front());
+        word_queue_.pop_front();
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
