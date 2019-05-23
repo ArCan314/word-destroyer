@@ -3,16 +3,20 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #include <string>
+#include <sstream>
 
 #include "resolver.h"
 #include "controller.h"
 #include "job_queue.h"
+#include "log.h"
 
 void Resolver::Start()
 {
+	Log::WriteLog(std::string("Resolver") + " :start.");
 	while (true)
 	{
 		get_packet();
+		
 		send_packet_ = controller_->get_responce(packet_);
 		Responce();
 	}

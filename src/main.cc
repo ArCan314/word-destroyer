@@ -1,4 +1,4 @@
-// #define CLIENT
+#define CLIENT
 #define SERVER
 #ifdef CLIENT
 #include <cstdlib>
@@ -15,7 +15,6 @@
 #include "include/contributor.h"
 #include "include/word_list.h"
 #include "include/controller.h"
-
 
 #include "include/console_io.h"
 #include "Windows.h"
@@ -92,6 +91,7 @@ int main()
 	}
 	*/
 	// word_list.AddWord("ans", "admin");
+	Log::WriteLog(std::string("Client") + " : main : init CLI.");
 	InitConsole();
 	ConsoleIO::set_account_sys_ptr(&acc_sys);
 	ConsoleIO::set_wordlist_ptr(&word_list);
@@ -99,6 +99,7 @@ int main()
 	ConsoleIO::IO_Start();
 
 	// std::cin >> std::string();
+	Log::WriteLog(std::string("Client") + " : main : exit.");
 	Log::CloseLog();
 	return 0;
 }
@@ -115,6 +116,7 @@ int main()
 
 #ifdef SERVER
 
+#include <string>
 #include <thread>
 #include <vector>
 #include <utility>
@@ -126,15 +128,18 @@ int main()
 #include "include/controller.h"
 #include "include/word_list.h"
 #include "include/account_sys.h"
+#include "include/log.h"
 
 void Recvr(JobQueue *queue)
 {
+	Log::WriteLog(std::string("Server") + " : Recvr : start.");
 	Receiver recvr(queue);
 	recvr.Start();
 }
 
 void Resolvr(JobQueue *queue, ServerController *controller)
 {
+	Log::WriteLog(std::string("Server") + " : Resolvr : start.");
 	Resolver resolvr(queue, controller);
 	resolvr.Start();
 }
@@ -147,10 +152,12 @@ int main()
 	WordList word_list;
 	ServerController controller(&word_list, &acc_sys);
 	JobQueue job_queue;
+	Log::WriteLog(std::string("Server") + " : main : server is initializing, recv: 1, send: " + std::to_string(thread_num));
 
 	std::vector<std::thread> Resolvrs;
 	for (int i = 0; i < thread_num; i++)
 		Resolvrs.push_back(std::thread(Resolvr, &job_queue, &controller));
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	std::thread Rcver(Recvr, &job_queue);
 	for (int i = 0; i < thread_num; i++)

@@ -6,11 +6,15 @@
 #include <condition_variable>
 
 #include "my_packet.h"
+#include "log.h"
 
 class MyQueue
 {
 public:
-	MyQueue() = default;
+	MyQueue() 
+	{
+		Log::WriteLog(std::string("MyQueue") + " : init success");
+	};
 
 	void push_back(const MyPacket &qdata);
 	MyPacket pop_front();

@@ -32,8 +32,7 @@ inline int get_round_time(int level)
 		return uid(rd);
 	}
 }
-
-long long get_level_up_bound(int level, UserType utype);
+double get_level_up_bound(int level, UserType utype);
 
 double get_gain_exp(int level, double time, int difficulty);
 

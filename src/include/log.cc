@@ -6,6 +6,9 @@
 #include <chrono>
 #include <ctime>
 #include <cctype>
+#include <thread>
+#include <mutex>
+#include <sstream>
 
 #include "log.h"
 
@@ -18,6 +21,7 @@ static std::ofstream log_stream;
 static std::string log_path;
 static const std::string log_doc("../log/"); // dir of log files
 static const std::string log_ext(".log");    // extension of log
+static std::mutex mutex_;
 
 // return a string consists of number in time_str
 static std::string RemoveAllPunct(const std::string &time_str)
@@ -79,18 +83,18 @@ bool InitLog()
 // write the mesg into the log with fixed pattern(TIME MESG)
 bool Log::WriteLog(const std::string &log_str)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!is_inited)
   {
     bool is_init_success = InitLog();
 	if (is_init_success)
 	{
 		is_inited = true;
-		Log::WriteLog("Log set up");
 	}
   }
   if (log_stream)
   {
-    log_stream << GetCurrentTime() << "  " << log_str << std::endl;
+	  log_stream << GetCurrentTime() << " t_id: " << std::this_thread::get_id() << " " << log_str << std::endl;
     return true;
   }
   else
@@ -107,6 +111,15 @@ const std::string &Log::get_log_path()
 
 bool Log::CloseLog()
 {
+	Log::WriteLog(std::string("Log") + " : close.");
   log_stream.close();
   return !log_stream.is_open();
+}
+
+std::string Log::get_thread_str()
+{
+	std::stringstream ss;
+	std::thread::id temp = std::this_thread::get_id();
+	ss << temp;
+	return ss.str();
 }

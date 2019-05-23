@@ -9,6 +9,7 @@
 #include "player.h"
 #include "contributor.h"
 #include "game.h"
+#include "log.h"
 
 static std::mutex mutex_;
 
@@ -19,6 +20,7 @@ MyPacket ServerController::get_responce(const MyPacket &quest)
 
     preparer_.Decode(quest);
     kind_ = static_cast<NetPktKind>(preparer_.kind);
+	Log::WriteLog(std::string("ServerController") + " : get_responce : recv quest, quest kind: " + std::to_string(kind_));
     switch (preparer_.kind)
     {
     case LOG_IN:
@@ -60,10 +62,12 @@ MyPacket ServerController::get_responce(const MyPacket &quest)
         break;
     }
 
-    send_packet = preparer_.Encode();
+	send_packet = preparer_.Encode();
+	send_packet.from = quest.from;
+	send_packet.from.sin_port = preparer_.client_port;
+    
     preparer_.Clear();
-    send_packet.from = quest.from;
-	send_packet.from.sin_port = client_port_.sin_port;
+    
     return send_packet;
 }
 
@@ -310,9 +314,11 @@ bool ServerController::LogOut()
 
 bool ClientController::LogIn(const std::string &name, const std::string &pswd)
 {
+	Log::WriteLog(std::string("ClientController") + " : LogIn");
     preparer_.Clear();
 
     preparer_.kind = LOG_IN;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.name_len = name.size();
     preparer_.name = name;
     preparer_.pswd_len = pswd.size();
@@ -355,9 +361,11 @@ bool ClientController::LogIn(const std::string &name, const std::string &pswd)
 
 bool ClientController::SignUp(const std::string &name, const std::string &pswd)
 {
+	Log::WriteLog(std::string("ClientController") + " : SignUp");
     preparer_.Clear();
 
     preparer_.kind = SIGN_UP;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.name_len = name.size();
     preparer_.name = name;
     preparer_.pswd_len = pswd.size();
@@ -389,14 +397,16 @@ bool ClientController::SignUp(const std::string &name, const std::string &pswd)
 
 bool ClientController::MyInfo(const unsigned uid)
 {
-    // already exists in the device
+	Log::WriteLog(std::string("ClientController") + " : MyInfo");
 	return true;
 }
 bool ClientController::ChangeRole(const unsigned uid)
 {
+	Log::WriteLog(std::string("ClientController") + " : ChangeRole");
     preparer_.Clear();
 
     preparer_.kind = CHANGE_ROLE;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
 
     auto temp = preparer_.Encode();
@@ -423,9 +433,11 @@ bool ClientController::ChangeRole(const unsigned uid)
 
 bool ClientController::UserList(const unsigned char utype, unsigned short user_per_page, unsigned page)
 {
+	Log::WriteLog(std::string("ClientController") + " : UserList");
     preparer_.Clear();
 
     preparer_.kind = USER_LIST;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.user_type = utype;
     preparer_.user_per_page = user_per_page;
     preparer_.page = page;
@@ -475,9 +487,11 @@ bool ClientController::UserList(const unsigned char utype, unsigned short user_p
 
 bool ClientController::Sort(unsigned uid, const unsigned char utype, unsigned short user_per_page, unsigned char sort_type)
 {
+	Log::WriteLog(std::string("ClientController") + " : Sort");
     preparer_.Clear();
 
     preparer_.kind = SORT;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
     preparer_.user_type = utype;
     preparer_.user_per_page = user_per_page;
@@ -528,9 +542,11 @@ bool ClientController::Sort(unsigned uid, const unsigned char utype, unsigned sh
 
 bool ClientController::Filter(unsigned uid, const unsigned char utype, unsigned short user_per_page, const FilterPacket &filter_packet)
 {
+	Log::WriteLog(std::string("ClientController") + " : Filter");
     preparer_.Clear();
 
     preparer_.kind = (filter_packet.filter_type == FPT_NAME) ? FILTER_NAME : FILTER_OTHER;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
     preparer_.user_type = utype;
     preparer_.user_per_page = user_per_page;
@@ -603,9 +619,11 @@ bool ClientController::Filter(unsigned uid, const unsigned char utype, unsigned 
 
 bool ClientController::SFTurnPage(unsigned uid, const unsigned char utype, unsigned short user_per_page, unsigned page)
 {
+	Log::WriteLog(std::string("ClientController") + " : SFTPG");
     preparer_.Clear();
 
     preparer_.kind = SF_PAGE;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
     preparer_.user_type = utype;
     preparer_.user_per_page = user_per_page;
@@ -656,9 +674,11 @@ bool ClientController::SFTurnPage(unsigned uid, const unsigned char utype, unsig
 
 bool ClientController::GetWord(unsigned passed)
 {
+	Log::WriteLog(std::string("ClientController") + " : getword");
     preparer_.Clear();
 
     preparer_.kind = GET_WORDS;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.passed = passed;
 
     auto temp = preparer_.Encode();
@@ -683,9 +703,11 @@ bool ClientController::GetWord(unsigned passed)
 
 bool ClientController::IncXp(unsigned uid, double exp)
 {
+	Log::WriteLog(std::string("ClientController") + " : inc_xp");
     preparer_.Clear();
 
     preparer_.kind = INC_XP;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
     preparer_.exp = exp;
 
@@ -709,9 +731,11 @@ bool ClientController::IncXp(unsigned uid, double exp)
 
 bool ClientController::WordCon(unsigned uid, const std::string &word)
 {
+	Log::WriteLog(std::string("ClientController") + " : word_con");
     preparer_.Clear();
 
     preparer_.kind = WORD_CON;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
     preparer_.word = word;
     preparer_.word_len = word.size();
@@ -741,9 +765,11 @@ bool ClientController::WordCon(unsigned uid, const std::string &word)
 
 bool ClientController::LogOut(unsigned uid)
 {
+	Log::WriteLog(std::string("ClientController") + " : log out");
     preparer_.Clear();
 
     preparer_.kind = LOG_OUT;
+	preparer_.client_port = recv_sock_.get_port_recver();
     preparer_.uid = uid;
 
     auto temp = preparer_.Encode();

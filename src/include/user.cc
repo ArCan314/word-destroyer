@@ -36,10 +36,10 @@ static void DecryptPswd(UserSerializationWarp &warp)
 
 User::User(std::ifstream &ifs)
 {
-    if (Load(ifs))
-        Log::WriteLog("");
-    else
-        Log::WriteLog("");
+	if (Load(ifs))
+		; // Log::WriteLog("");
+	else
+		; // Log::WriteLog("");
 }
 
 bool User::Save(std::ofstream &ofs) const

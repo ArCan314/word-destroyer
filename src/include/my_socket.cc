@@ -4,6 +4,8 @@
 
 #include <random>
 #include <cstring>
+#include <cstdlib>
+#include <ctime>
 
 #include "my_socket.h"
 #include "my_packet.h"
@@ -11,31 +13,41 @@
 
 static const char *kDefaultRecvPort = "9961";
 
-static int get_send_port_random();
-
-MySocket::MySocket(SocketType sock_type) : sock_type_(sock_type)
+static int get_recv_port_random();
+int get_recv_port_random()
 {
-	if (InitSock(sock_type_, kDefaultRecvPort) == ERROR_SUCCESS)
+	std::srand(std::time(NULL));
+
+	return std::rand() % 10000 + 10000;
+}
+
+
+
+MySocket::MySocket(SocketType sock_type) : sock_type_(sock_type), my_addr_info_(), from_(), recvbuf_()
+{
+	if (InitSock(sock_type_, std::to_string(get_recv_port_random()).c_str()) == ERROR_SUCCESS)
 	{
 		init_success_ = true;
-		// log write
+
+		Log::WriteLog(std::string("MySocket") + " :init success.");
 	}
 	else
 	{
 		init_success_ = false;
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " :init fail.");
 	}
 }
 
-MySocket::MySocket(SocketType sock_type, const char *port) : sock_type_(sock_type)
+MySocket::MySocket(SocketType sock_type, const char *port) : sock_type_(sock_type), my_addr_info_(), from_(), recvbuf_()
 {
 	if (InitSock(sock_type_, port) == ERROR_SUCCESS)
 	{
 		init_success_ = true;
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " :init success.");
 	}
 	else
 	{
+		Log::WriteLog(std::string("Mysocket") + " :init fail.");
 		init_success_ = false;
 		// log write
 	}
@@ -49,17 +61,17 @@ MySocket::~MySocket()
 		if (last_error_ == SOCKET_ERROR)
 		{
 			last_error_ = WSAGetLastError();
-			// log write
+			Log::WriteLog(std::string("Mysocket") + "~MysSocket :close socket error, WSAErrorCode: " + std::to_string(last_error_));
 		}
 	}
 	if (WSACleanup())
 	{
 		last_error_ = WSAGetLastError();
-		// log write
+		Log::WriteLog(std::string("Mysocket") + "~MySocket : WSACleanup error, WSAErrorCode: " + std::to_string(last_error_));
 	}
 	else
 	{
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " : destructed");
 	}
 }
 
@@ -71,7 +83,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 	last_error_ = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (last_error_)
 	{
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " : InitSock: WSAStartup error, WSAErrorCode: " + std::to_string(last_error_));
 
 		return last_error_;
 	}
@@ -87,7 +99,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 	last_error_ = getaddrinfo("localhost", port, &hint, &result);
 	if (last_error_)
 	{
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " : InitSock: getaddrinfo error, WSAErrorCode: " + std::to_string(last_error_));
 		WSACleanup();
 		return last_error_;
 	}
@@ -98,7 +110,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 		last_error_ = WSAGetLastError();
 		freeaddrinfo(result);
 		WSACleanup();
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " : InitSock: get socket error, WSAErrorCode: " + std::to_string(last_error_));
 		return last_error_;
 	}
 
@@ -107,7 +119,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 		last_error_ = bind(sock_, result->ai_addr, static_cast<int>(result->ai_addrlen));
 		if (last_error_ == SOCKET_ERROR)
 		{
-			// log write
+			Log::WriteLog(std::string("Mysocket") + " : InitSock: RECV_SOCKET failed to bind , WSAErrorCode: " + std::to_string(WSAGetLastError()));
 			freeaddrinfo(result);
 			WSACleanup();
 			return last_error_;
@@ -117,6 +129,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 		last_error_ = getsockname(sock_, reinterpret_cast<sockaddr *>(&my_addr_info_), &my_addr_info_size_);
 		if (last_error_)
 		{
+			Log::WriteLog(std::string("Mysocket") + " : InitSock: RECV_SOCKET failed to getsocketname , WSAErrorCode: " + std::to_string(last_error_));
 			freeaddrinfo(result);
 			WSACleanup();
 			return last_error_;
@@ -130,7 +143,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 		last_error_ = getsockopt(sock_, SOL_SOCKET, SO_MAX_MSG_SIZE, reinterpret_cast<char *>(&max_msg_size_), reinterpret_cast<int *>(&max_msg_size_len_));
 		if (last_error_ == SOCKET_ERROR)
 		{
-			// log write
+			Log::WriteLog(std::string("Mysocket") + " : InitSock: SEND_SOCKET failed to get socket option , WSAErrorCode: " + std::to_string(last_error_));
 			freeaddrinfo(result);
 			WSACleanup();
 			return last_error_;
@@ -138,6 +151,7 @@ DWORD MySocket::InitSock(SocketType soc_type, const char *port)
 
 		freeaddrinfo(result);
 	}
+	Log::WriteLog(std::string("Mysocket") + " : InitSock: init success");
 	return ERROR_SUCCESS;
 }
 
@@ -154,7 +168,7 @@ DWORD MySocket::_RecvFrom(MyPacket &queue_data)
 		else if (recv_len_ < 0)
 		{
 			last_error_ = WSAGetLastError();
-			// log write
+			Log::WriteLog(std::string("Mysocket") + " : RecvFrom : recv error, WSAErrorCode: " + std::to_string(last_error_));
 			// error handle
 		}
 		else
@@ -164,6 +178,7 @@ DWORD MySocket::_RecvFrom(MyPacket &queue_data)
 			queue_data.data = new char[recv_len_]();
 			if (queue_data.data == nullptr)
 			{
+				Log::WriteLog(std::string("Mysocket") + " : RecvFrom : allocate memory for queue_data");
 				// log write cannot allocate memory for queue_data
 			}
 			else
@@ -171,6 +186,7 @@ DWORD MySocket::_RecvFrom(MyPacket &queue_data)
 			break;
 		}
 	}
+	Log::WriteLog(std::string("Mysocket") + " : RecvFrom : recv success, recv_len: " + std::to_string(recv_len_));
 	return ERROR_SUCCESS;
 }
 
@@ -180,10 +196,11 @@ DWORD MySocket::_SendTo(const MyPacket &queue_data)
 	if (last_error_ == SOCKET_ERROR)
 	{
 		last_error_ = WSAGetLastError();
-		// log write
+		Log::WriteLog(std::string("Mysocket") + " : SendTo : send error, WSAErrorCode: " + std::to_string(last_error_));
 		// error handling
 		return last_error_;
 	}
+	Log::WriteLog(std::string("Mysocket") + " : RecvFrom : recv success, send_len: " + std::to_string(last_error_));
 	return ERROR_SUCCESS;
 }
 
@@ -197,7 +214,6 @@ MyPacket MySocket::RecvFrom()
 		last_error_ = _RecvFrom(res);
 		if (last_error_ != ERROR_SUCCESS)
 		{
-			// log write
 			if (res.data)
 				delete res.data;
 			res = MyPacket();
@@ -207,7 +223,6 @@ MyPacket MySocket::RecvFrom()
 	}
 	else
 	{
-		// log write
 		return MyPacket();
 	}
 }
@@ -220,7 +235,6 @@ bool MySocket::SendTo(const MyPacket &queue_data)
 
 		if (last_error_ != ERROR_SUCCESS)
 		{
-			// log write
 			return false;
 		}
 
@@ -228,18 +242,7 @@ bool MySocket::SendTo(const MyPacket &queue_data)
 	}
 	else
 	{
-		// log write
 		return false;
 	}
 }
 
-int get_send_port_random()
-{
-	static constexpr int kSendPortLowerBound = 10000;
-	static constexpr int kSendPortUpperBound = 20000;
-
-	static std::mt19937 g;
-	static std::uniform_int_distribution<int> uid(kSendPortLowerBound, kSendPortUpperBound);
-
-	return uid(g);
-}

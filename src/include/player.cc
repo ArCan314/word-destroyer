@@ -11,9 +11,9 @@
 Player::Player(std::ifstream &ifs) : User(ifs), exp_(double(0.0)), level_passed_(int(0))
 {
     if (Load(ifs))
-        Log::WriteLog("Loading player Succeed");
+        Log::WriteLog("Player: Loading player Succeed");
     else
-        Log::WriteLog("Failed to load player");
+        Log::WriteLog("Player: Failed to load player");
 }
 
 void Player::from_contributor(const Contributor &con)

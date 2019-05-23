@@ -7,6 +7,7 @@
 
 #include "my_packet.h"
 #include "my_socket.h"
+#include "log.h"
 
 
 
@@ -54,25 +55,8 @@ class ServerController
 {
 public:
 	ServerController() = delete;
-	ServerController(WordList *word_list, AccountSys *acc_sys) : word_list_(word_list), acc_sys_(acc_sys), preparer_() 
-	{
-		WSADATA wsaData;
-		WSAStartup(MAKEWORD(2, 2), &wsaData);
+	ServerController(WordList *word_list, AccountSys *acc_sys) : word_list_(word_list), acc_sys_(acc_sys), preparer_() {}
 
-		addrinfo hint, *res = nullptr;
-		ZeroMemory(&hint, sizeof(hint));
-		hint.ai_protocol = IPPROTO_UDP;
-		hint.ai_family = AF_INET;
-		hint.ai_flags = AI_PASSIVE;
-		hint.ai_socktype = SOCK_DGRAM;
-		getaddrinfo("localhost", "10086", &hint, &res);
-
-		sockaddr_in *temp = reinterpret_cast<sockaddr_in *>(res->ai_addr);
-
-		client_port_ = *temp;
-
-		freeaddrinfo(res);
-	}
 	ServerController(const ServerController &other) = delete;
 	ServerController &operator=(const ServerController &rhs) = delete;
 
@@ -109,13 +93,13 @@ class ClientController
 public:
 	ClientController() = delete;
 	ClientController(ClientWordList *word_list, ClientAccountSys *acc_sys) 
-		: word_list_(word_list), acc_sys_(acc_sys), send_sock_(SEND_SOCKET), preparer_(), recv_sock_(RECV_SOCKET, "10086")
+		: word_list_(word_list), acc_sys_(acc_sys), send_sock_(SEND_SOCKET), preparer_(), recv_sock_(RECV_SOCKET)
 	{
 		WSADATA wsaData;
-		int e;
+		Log::WriteLog(std::string("ClientController") + " : init : get server addr");
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData))
 		{
-			// log
+			Log::WriteLog(std::string("ClientController") + " : init : WSAStartup fail, WSAErrorCode: " + std::to_string(WSAGetLastError()));
 			return;
 		}
 		addrinfo hint, *res = 0;
@@ -127,7 +111,7 @@ public:
 		hint.ai_socktype = SOCK_DGRAM;
 		if (getaddrinfo("localhost", "9961", &hint, &res))
 		{
-			// log
+			Log::WriteLog(std::string("ClientController") + " : init : getaddrinfo fail, WSAErrorCode: " + std::to_string(WSAGetLastError()));
 			return;
 		}
 
@@ -155,9 +139,9 @@ private:
 	ClientWordList *word_list_;
 	ClientAccountSys *acc_sys_;
 
-	NetPktKind kind_;
+	NetPktKind kind_ = LOG_IN;
 	Preparer preparer_;
-	sockaddr_in server_addr_;
+	sockaddr_in server_addr_ = sockaddr_in();
 
 	MySocket send_sock_;
 	MySocket recv_sock_;

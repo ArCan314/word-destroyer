@@ -1,5 +1,6 @@
 #pragma once
-
+#include <thread>
+#include <sstream>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
@@ -17,8 +18,9 @@ public:
     Resolver() = delete;
     Resolver(const Resolver &other) = delete;
     Resolver &operator=(const Resolver &rhs) = delete;
-    Resolver(JobQueue *queue, ServerController *controller) : controller_(controller), socksend_(SEND_SOCKET)
+    Resolver(JobQueue *queue, ServerController *controller) : controller_(controller), socksend_(SEND_SOCKET), packet_(), send_packet_()
 	{
+		Log::WriteLog(std::string("Resolver") +" :bind.");
 		queue->Bind(this);
 	};
 
@@ -30,9 +32,9 @@ public:
 	void Responce();
 
 private:
-	MyQueue *job_queue_; // 从该队列中取出数据并处理发送
+	MyQueue *job_queue_ = nullptr; // 从该队列中取出数据并处理发送
 
-    ServerController *controller_;
+    ServerController *controller_ = nullptr;
     MySocket socksend_;	 // 发回给用户
 	MyPacket packet_;
     MyPacket send_packet_;

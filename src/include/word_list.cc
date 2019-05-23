@@ -25,11 +25,12 @@ bool WordList::AddWord(const std::string &new_word, const std::string &name)
 {
     if (word_set_.count(new_word))
     {
-        Log::WriteLog(std::string("WordList: ") + new_word + " is already in the word list");
+        Log::WriteLog(std::string("WordList: ") + new_word + " is already in the word list.");
         return false;
     }
     else
     {
+		Log::WriteLog(std::string("WordList: ") + new_word + " added.");
         is_updated = true;
         word_set_.insert(new_word);
         word_vec_.push_back({new_word, name, 0, 0, static_cast<unsigned char>(get_difficulty(new_word))});
@@ -270,6 +271,7 @@ Word WordList::Deserialize(std::ifstream &ifs)
 
 void ClientWordList::AddWord(const std::pair<std::string, int> &word)
 {
+	Log::WriteLog(std::string("CWordList: ") + word.first + " recved.");
     word_queue_.push_back(word);
 }
 

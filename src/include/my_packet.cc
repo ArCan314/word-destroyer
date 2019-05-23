@@ -18,6 +18,7 @@ void Preparer::Clear()
     name.clear();
     pswd.clear();
     word.clear();
+	client_port = 0;
 
     is_log_in = 0;
     is_sign_up = 0;
@@ -50,6 +51,9 @@ void Preparer::Decode(const MyPacket &my_packet)
     Clear();
     int ptr = 0;
     kind = my_packet.data[ptr++];
+
+	client_port = *(unsigned *)(my_packet.data + ptr);
+	ptr += sizeof(client_port);
 
     switch (kind)
     {
@@ -293,11 +297,9 @@ MyPacket Preparer::Encode()
     int len = 0;
     char buffer[2048];
     MyPacket res;
-    unsigned short *s_buffer;
-    unsigned *u_buffer;
-    double *d_buffer;
 
     CopyToCSTR(kind, buffer, len);
+	CopyToCSTR(client_port, buffer, len);
 
     switch (kind)
     {

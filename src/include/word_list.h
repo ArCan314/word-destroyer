@@ -70,8 +70,8 @@ public:
     void AddWord(const std::pair<std::string, int> &word);
     bool get_word(std::pair<std::string, int> &buffer);
 
-    unsigned short time;
-    unsigned char round;
+    unsigned short time = 0;
+    unsigned char round = 0;
 
     ~ClientWordList() = default;
 

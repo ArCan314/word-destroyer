@@ -12,4 +12,6 @@ const std::string &get_log_path();
 
 // remember to close log file stream
 bool CloseLog();
+
+std::string get_thread_str();
 };

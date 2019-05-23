@@ -266,7 +266,7 @@ public:
 
 private:
 	static unsigned uid_;
-	UserType utype_;
+	UserType utype_ = USERTYPE_U;
 	std::string name_;
 
 	Contributor con_;

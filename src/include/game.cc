@@ -1,5 +1,6 @@
 #include "game.h"
 #include "user.h"
+#include "log.h"
 
 static constexpr int max_lv = 400;
 static constexpr int max_stage = 300;
@@ -9,6 +10,7 @@ static bool is_init = false;
 
 static void init_level_table()
 {
+	Log::WriteLog(std::string("Game Logic") + " : init.");
 	player_exp_table[0] = 15;
 	contributor_level_table[0] = 2;
 
@@ -26,7 +28,7 @@ static void init_level_table()
 	is_init = true;
 }
 
-long long get_level_up_bound(int level, UserType utype)
+double get_level_up_bound(int level, UserType utype)
 {
 	if (!is_init)
 	{

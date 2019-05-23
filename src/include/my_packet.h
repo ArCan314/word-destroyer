@@ -108,10 +108,11 @@ public:
 
     void Clear();
 
-    MyPacket raw_packet;
+    MyPacket raw_packet = MyPacket();
 
     unsigned char kind = 0;
     unsigned uid = 0;
+	unsigned short client_port = 0;
 
     unsigned char name_len = 0;
     unsigned char pswd_len = 0;
