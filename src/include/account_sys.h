@@ -68,7 +68,7 @@ public:
 			return UserType::USERTYPE_U;
 	}
 
-	// DEBUG MEMBERS
+	// DEBUG
 	void set_current_user() 
 	{
 		if (players_.size())

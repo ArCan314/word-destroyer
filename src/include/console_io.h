@@ -1,6 +1,5 @@
 #pragma once 
 
-// WARNING : OS(WIN32) SPECIFIC CODE
 class AccountSys;
 class WordList;
 enum NextPage;
@@ -43,7 +42,5 @@ namespace ConsoleIO
 	DWORD to_user_list_page(NextPage &next_page);
 	DWORD to_contributor_play_page(NextPage &next_page);
 	DWORD to_player_play_page(NextPage &next_page);
-
-
 };
 

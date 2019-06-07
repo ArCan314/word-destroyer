@@ -26,11 +26,11 @@ public:
         : User(name, pswd, utype), exp_(double(0)), level_passed_(int(0)) {}
 
 	void from_contributor(const Contributor &con);
-	void raise_exp_(double increasement) { exp_ += increasement; inc_level(); }
-    void inc_level_passed() { level_passed_++; }
+	void raise_exp_(double increasement) noexcept { exp_ += increasement; inc_level(); }
+    void inc_level_passed() noexcept { level_passed_++; }
 
-    double get_exp() const { return exp_; }
-    int get_level_passed() const { return level_passed_; }
+    double get_exp() const noexcept { return exp_; }
+    int get_level_passed() const noexcept { return level_passed_; }
 
     virtual bool Save(std::ofstream &ofs) const override;
     virtual bool Load(std::ifstream &ifs) override;
@@ -41,6 +41,4 @@ public:
 private:
     double exp_ = 0.0;
     int level_passed_ = 0;
-
-
 };
